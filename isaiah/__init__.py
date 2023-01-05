@@ -1,1 +1,1 @@
-from dataset import MammoData
+from .dataset import MammoData
