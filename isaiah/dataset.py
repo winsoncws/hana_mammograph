@@ -5,6 +5,9 @@ import torch
 import pydicom
 from torch.utils.data import Dataset, DataLoader
 
+#for viewing and troubleshooting
+import matplotlib.pyplot as plt
+
 class MammoData(Dataset):
 
     def __init__(self, datadir):
@@ -21,5 +24,13 @@ class MammoData(Dataset):
         ds = pydicom.dcmread(filepath)
         return ds
 
+    def getFileList(self):
+        return self.datafiles
+
 if __name__ == "__main__":
-    pass
+    datadir = "/Users/isaiah/datasets/kaggle_mammograph/"
+    data = MammoData(datadir)
+    fileList = data.getFileList()
+    ds = data[2]
+    ds_arr = ds.pixel_array
+    print(fileList)
