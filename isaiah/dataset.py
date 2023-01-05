@@ -14,7 +14,7 @@ class MammoData(Dataset):
                                                 recursive=True)
 
     def __len__(self):
-        print(len(self.datafiles))
+        return len(self.datafiles)
 
     def __getitem__(self, i):
         filepath = self.datafiles[i]
