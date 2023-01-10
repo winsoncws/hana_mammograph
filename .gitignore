@@ -1,5 +1,6 @@
 # Prevent issues with Kaggle Notebook (only for this repo)
 *.ipynb
+*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
