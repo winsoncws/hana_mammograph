@@ -1,0 +1,3 @@
+source: "/Users/biomind/OneDrive - Hanalytics Pte Ltd/datasets/dvn_data/seg"
+ground_truth: "/Users/biomind/OneDrive - Hanalytics Pte Ltd/datasets/dvn_data/centerline"
+destination: "/Users/biomind/OneDrive - Hanalytics Pte Ltd/datasets/dvn_data/seg_centerline.h5"
