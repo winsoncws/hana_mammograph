@@ -1,7 +1,8 @@
 import sys, os
-from os.path import join, abspath, dirname
+from os.path import join, abspath, dirname, basename
 import glob
 import numpy as np
+import pandas as pd
 import cv2
 from scipy.ndimage import label
 from skimage.measure import regionprops
@@ -13,20 +14,79 @@ from addict import Dict
 import h5py
 import yaml
 
+class MetadataPreprocess:
+
+    def __init__(self, src, dest, cfgs):
+        self.mdpath = abspath(src)
+        self.savepath = abspath(dest)
+        self.inp_md = pd.read_csv(self.mdpath)
+        self.out_md = None
+
+        self.age_nan = cfgs.age_nan
+        self.cols = cfgs.selected_columns
+        self.lmap = cfgs.laterality_map
+        self.vmap = cfgs.view_map
+        self.dmap = cfgs.density_map
+        self.dncmap = cfgs.diff_neg_case_map
+        self.smap = {'json': self._SaveJson, 'csv': self._SaveCSV}
+
+    def GenerateMetadata(self):
+        md = self.inp_md[self.cols].copy()
+        if self.age_nan == "mean":
+            md.age.mask(md.age.isna(), md.age.mean(), inplace=True)
+        else:
+            md = md[md.age.notna()]
+        md.laterality = md.laterality.map(self.lmap, na_action="ignore")
+        md.view = md.view.map(self.vmap, na_action="ignore")
+        md.density = md.density.map(self.dmap, na_action="ignore")
+        md.density.mask(md.density.isna(), 0, inplace=True)
+        md.difficult_negative_case = md.difficult_negative_case.map(self.dncmap, na_action="ignore")
+        md.set_index('image_id', inplace=True)
+        self.out_md = md
+
+    def _SaveJson(self):
+        self.out_md.to_json(self.savepath, orient="index", indent=4)
+        return
+
+    def _SaveCSV(self):
+        self.out_md.to_csv(self.savepath, index=False)
+        return
+
+    def Save(self):
+        parentdir = dirname(self.savepath)
+        if not os.path.isdir(parentdir):
+            os.makedirs(parentdir)
+        fext = self.savepath.split(".", 1)[-1]
+        self.smap.get(fext, lambda: 'Invalid File Extension')()
+        print(f"Metadata file created in {self.savepath}.")
+        return
+
+
 class MammoPreprocess:
 
-    def __init__(self, source_directory, savepath, file_extension=".png",
+    def __init__(self, source_directory, savepath, file_extension="png",
                  resolution=None, normalize=False):
         self.src = abspath(source_directory)
         self.src_len= len(self.src) + 1
         self.savepath = abspath(savepath)
         self.res = resolution
-        self.file_ext = file_extension
+        self.fext = file_extension
+        self.data_methods = {
+                                         'png': self._GenerateFolderTreeDataset,
+                                         'npy': self._GenerateFolderTreeDataset,
+                                         'npz': self._GenerateFolderTreeDataset,
+                                         'h5': self._GenerateH5Dataset
+        }
+        self.save_methods = {
+                                         'png': self._SavePNG,
+                                         'npy': self._SaveNumpy,
+                                         'npz': self._SaveNumpyCompressed
+        }
         self.datafiles = glob.glob(join(self.src, "**/*.dcm"),
                                                 recursive=True)
         self.normit = normalize
 
-    def ProportionInvert(self, im, alpha=0.75):
+    def ProportionInvert(self, im, alpha=0.7):
         p = np.sum(im[im == np.max(im)])/np.prod(im.shape)
         if p > alpha:
             im = im.max() - im
@@ -75,40 +135,51 @@ class MammoPreprocess:
                                               dtype=cv2.CV_32F)
         return im
 
-    def save(self, filepath, im):
-        if self.file_ext == ".npy":
-            np.save(filepath, im)
-        elif self.file_ext == ".npz":
-            np.savez_compressed(filepath, im)
-        else:
-            plt.imsave(filepath, im, cmap="gray")
+    def _SaveNumpy(self, filepath, im):
+        np.save(filepath, im)
+        return
 
-    def GenerateFolderTreeDataset(self):
+    def _SaveNumpyCompressed(self, filepath, im):
+        np.savez_compressed(filepath, im)
+        return
+
+    def _SavePNG(self, filepath, im):
+        plt.imsave(filepath, im, cmap="gray")
+        return
+
+    def _Save(self, filepath, im):
+        self.save_methods.get(self.fext, lambda: "Invalid file extension.")(filepath, im)
+        return
+
+    def _GenerateFolderTreeDataset(self):
         no_of_files = 0
         for file in self.datafiles:
             parentdir = dirname(file[self.src_len:])
             name = file[self.src_len:].split(".", 1)[0]
             os.makedirs(join(self.savepath, parentdir), exist_ok=True)
             im = self.ProcessDicom(file)
-            sfile = os.path.join(self.savepath, name + self.file_ext)
-            self.save(sfile, im)
+            sfile = os.path.join(self.savepath, name + "." + self.fext)
+            self._Save(sfile, im)
             no_of_files += 1
         print(f"{self.savepath} created. Total of {str(no_of_files)} images.")
+        return
 
-    def GenerateH5Dataset(self):
-        hdf = h5py.File(self.savepath, "a")
+    def _GenerateH5Dataset(self):
+        hdf = h5py.File(self.savepath, "w")
         no_of_files = 0
         for file in self.datafiles:
-            parentdir = dirname(file[self.src_len:])
-            name = file[self.src_len:].split(".", 1)[0]
-            grp = hdf.require_group(parentdir)
+            name = basename(file).split(".", 1)[0]
             im = self.ProcessDicom(file)
-            grp.create_dataset(name, data=im, compression="gzip",
+            hdf.create_dataset(name, data=im, compression="gzip",
                                compression_opts=9)
             no_of_files += 1
         hdf.close()
         print(f"{self.savepath} created. Total of {str(no_of_files)} images.")
+        return
 
+    def GenerateDataset(self):
+        self.data_methods.get(self.fext, lambda: "Invalid output dataset.")()
+        return
 
 class ProcessPath(argparse.Action):
 
@@ -116,67 +187,76 @@ class ProcessPath(argparse.Action):
         super().__init__(option_strings, dest, **kwargs)
 
     def __call__(self, parser, namespace, values, option_string):
-        if self.dest in ["src", "dest"]:
+        if self.dest in ["src", "dest"] :
             if (values == None) or (values == ".") or (values == "./"):
                 values = os.getcwd()
             if values[-1] != "/":
                 values = f"{values}/"
         elif self.dest == "fext":
-            if values[0] != ".":
-                values = f".{values}"
+            if values[0] == ".":
+                values = values[1:]
         setattr(namespace, self.dest, values)
 
-class ConvertTuple(argparse.Action):
+class ConvertList(argparse.Action):
 
     def __init__(self, option_strings, dest, **kwargs):
         super().__init__(option_strings, dest, **kwargs)
 
     def __call__(self, parser, namespace, values, option_string):
         values = ast.literal_eval(values)
-        if not isinstance(values, tuple):
-            raise Exception("Resolution is not a tuple.")
+        if not isinstance(values, list):
+            raise Exception("Resolution is not a list.")
         setattr(namespace, self.dest, values)
 
 def main(args):
     if args.cfgs != None:
         cfgs = Dict(yaml.load(open(args.cfgs, "r"), Loader=yaml.Loader))
-        preprocessing = MammoPreprocess(cfgs.src, cfgs.dest,
-                                                          cfgs.fext, cfgs.res,
-                                                          cfgs.norm)
-        makeh5 = cfgs.makeh5
+        data_prep = MammoPreprocess(cfgs.source, cfgs.destination,
+                                                      cfgs.file_extension, cfgs.resolution,
+                                                      cfgs.normalization)
+        mcfgs = Dict(yaml.load(open(cfgs.metadata_cfile, "r"), Loader=yaml.Loader))
+        mdata_prep = MetadataPreprocess(cfgs.metadata_src, cfgs.metadata_dest,
+                                                             mcfgs)
     else:
-        preprocessing = MammoPreprocess(args.src, args.dest,
-                                                          args.fext, args.res,
-                                                          args.norm)
-        makeh5 = args.makeh5
-    if makeh5:
-        preprocessing.GenerateH5Dataset()
-    else:
-        preprocessing.GenerateFolderTreeDataset()
+        data_prep = MammoPreprocess(args.source, args.destination,
+                                                      args.file_extension, args.resolution,
+                                                      args.normalization)
+        mcfgs = Dict(yaml.load(open(args.metadata_cfile, "r"), Loader=yaml.Loader))
+        mdata_prep = MetadataPreprocess(args.metadata_src, args.metadata_dest,
+                                                             mcfgs)
+    mdata_prep.GenerateMetadata()
+    mdata_prep.Save()
+    data_prep.GenerateDataset()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config-file", type=str, metavar="PATH",
                         dest="cfgs", nargs="?", default=None,
-                        help=("Configuration yaml file."
+                        help=("Configuration yaml file. "
                               "All other arguments ignored if this is passed."))
     parser.add_argument("-e", "--extension", type=str, metavar="EXT",
-                        dest="fext", nargs="?", default=".png", action=ProcessPath,
+                        dest="file_extension", nargs="?", default=".png", action=ProcessPath,
                         help=("File extension for output images."))
     parser.add_argument("-r", "--resolution", metavar="INT,INT",
-                        dest="res", nargs="?", default=None, action=ConvertTuple,
+                        dest="resolution", nargs="?", default=None, action=ConvertList,
                         help=("Desired resolution of the output images."))
     parser.add_argument("-n", "--normalize", action="store_true",
-                        dest="norm",
+                        dest="normalization",
                         help=("Normalize the image to within 0, 1. "))
     parser.add_argument("-h5", "--h5-dataset", action="store_true",
                         dest="makeh5",
                         help=("Create a hdf5 dataset."))
-    parser.add_argument("src", type=str, default=None, action=ProcessPath,
+    parser.add_argument("source", metavar="src", nargs="?", type=str, default=None, action=ProcessPath,
                         help=("[PATH] Directory to search for DICOM files recursively."))
-    parser.add_argument("dest", type=str, default=None, action=ProcessPath,
+    parser.add_argument("destination", metavar="dest", nargs="?", type=str, default=None, action=ProcessPath,
                         help=("[PATH] Directory to save output images."))
+    parser.add_argument("metadata_src", metavar="mds", nargs="?", type=str, default=None, action=ProcessPath,
+                        help=("[PATH] Filepath to metadata file."))
+    parser.add_argument("metadata_dest", metavar="mdd", nargs="?", type=str, default=None, action=ProcessPath,
+                        help=("[PATH] Filepath to save processed metadata file."))
+    parser.add_argument("metadata_cfile", metavar="mdc", nargs="?", type=str, default=None, action=ProcessPath,
+                        help=("[PATH] Filepath to metadata configurations file."))
     args = parser.parse_args()
 
     main(args)
