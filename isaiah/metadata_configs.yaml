@@ -1,6 +1,7 @@
 selected_columns: ['image_id', 'patient_id', 'laterality', 'view', 'age',
                    'cancer', 'implant', 'density', 'machine_id', 
                    'difficult_negative_case']
+default_value: 'na'
 age_nan: "mean"
 laterality_map: {'L': 0, 'R': 1}
 view_map: {'CC': 0, 'MLO': 1}

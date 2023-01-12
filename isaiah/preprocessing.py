@@ -1,4 +1,5 @@
 import sys, os
+from collections import defaultdict
 from os.path import join, abspath, dirname, basename
 import glob
 import numpy as np
@@ -22,12 +23,17 @@ class MetadataPreprocess:
         self.inp_md = pd.read_csv(self.mdpath)
         self.out_md = None
 
+        if cfgs.default_value == 'na':
+            self.default_value = np.nan
+        else:
+            self.default_value = ast.literal_eval(cfgs.default_value)
+
         self.age_nan = cfgs.age_nan
         self.cols = cfgs.selected_columns
-        self.lmap = cfgs.laterality_map
-        self.vmap = cfgs.view_map
-        self.dmap = cfgs.density_map
-        self.dncmap = cfgs.diff_neg_case_map
+        self.lmap = defaultdict(lambda: self.default_value, cfgs.laterality_map)
+        self.vmap = defaultdict(lambda: self.default_value, cfgs.view_map)
+        self.dmap = defaultdict(lambda: self.default_value, cfgs.density_map)
+        self.dncmap = defaultdict(lambda: self.default_value, cfgs.diff_neg_case_map)
         self.smap = {'json': self._SaveJson, 'csv': self._SaveCSV}
 
     def GenerateMetadata(self):
@@ -41,6 +47,7 @@ class MetadataPreprocess:
         md.density = md.density.map(self.dmap, na_action="ignore")
         md.density.mask(md.density.isna(), 0, inplace=True)
         md.difficult_negative_case = md.difficult_negative_case.map(self.dncmap, na_action="ignore")
+        md.dropna(inplace=True)
         md.set_index('image_id', inplace=True)
         self.out_md = md
 
