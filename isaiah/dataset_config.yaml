@@ -1,2 +1,2 @@
-augmentations: {"contrast_brightness", "exponential"}
+augmentations: {"contrast_brightness"}
 labels: ["laterality", "view", "age", "cancer", "implant", "density"] 

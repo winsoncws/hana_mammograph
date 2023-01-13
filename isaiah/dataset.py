@@ -8,15 +8,13 @@ from skimage.measure import label
 import cv2
 import torch
 import torchvision
+import torchio as tio
 import pydicom
 import scipy.stats as st
 import yaml
 from addict import Dict
 import h5py
 from torch.utils.data import Dataset, DataLoader
-
-# Only for troubleshooting
-import matplotlib.pyplot as plt
 
 #for viewing and troubleshooting
 import matplotlib.pyplot as plt
@@ -35,8 +33,8 @@ class MammoH5Data(Dataset):
         }
         self.aug_map = defaultdict(self._AugInvalid,
             {
-                "contrast_brightness": self._AdjustContrastBrightness,
-                "exponential": self._Exponent
+                "contrast_brightness": tio.RescaleIntensity(out_min_max=(0, 1),
+                                                            percentiles=(0, 99.5))
             }
         )
         self.aug = cfgs.augmentations
@@ -54,8 +52,8 @@ class MammoH5Data(Dataset):
             ds = f.get(key)
             ds_arr = np.zeros_like(ds)
             ds.read_direct(ds_arr)
-        ds_aug = self.Augment(ds_arr)
         md = self.metadata.loc[key, self.labels].to_numpy()
+        ds_aug = self.Augment(np.expand_dims(ds_arr, (0, 2)))
         return key, torch.from_numpy(ds_aug), torch.from_numpy(md)
 
     def _ReadCSV(self):
@@ -79,15 +77,12 @@ class MammoH5Data(Dataset):
         prompt = "Invalid augmentation"
         raise Exception(prompt)
 
-    def _AdjustContrastBrightness(self, im):
-        return im
-
-    def _Exponent(self, im):
-        return im
-
     def Augment(self, im):
+        aug_list = []
         for key in self.aug:
-            self.aug_map[key](im)
+            aug_list.append(self.aug_map[key])
+        transform = tio.Compose(aug_list)
+        im = transform(im)
         return im
 
 if __name__ == "__main__":
@@ -99,8 +94,8 @@ if __name__ == "__main__":
     train_data = MammoH5Data(filepath, mdpath, cfgs)
     train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
     img_id, inp, gt = next(iter(train_loader))
-    im = inp.numpy()[0]
-    labels = gt.numpy()[0]
+    im = inp.numpy().squeeze()
+    labels = gt.numpy().squeeze()
     print(img_id)
     print(labels)
     plt.imshow(im, cmap="gray")
