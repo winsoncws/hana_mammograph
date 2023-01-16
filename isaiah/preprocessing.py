@@ -14,14 +14,19 @@ import argparse
 from addict import Dict
 import h5py
 import yaml
+import json
+from sklearn.model_selection import train_test_split
 
 class MetadataPreprocess:
 
-    def __init__(self, src, dest, cfgs):
+    def __init__(self, src, dest, ttsplit_dest, cfgs):
         self.mdpath = abspath(src)
         self.savepath = abspath(dest)
         self.inp_md = pd.read_csv(self.mdpath)
         self.out_md = None
+        self.test_size = cfgs.test_size
+        self.train_test_dict = {}
+        self.ttsplit_dest = ttsplit_dest
 
         if cfgs.default_value == 'na':
             self.default_value = np.nan
@@ -51,6 +56,9 @@ class MetadataPreprocess:
         md.set_index('image_id', inplace=True)
         self.out_md = md
 
+    def GenerateTrainEvalSplit(self):
+        self.train_test_dict["Train"], self.train_test_dict["Test"] = train_test_split(self.out_md.index, test_size=self.test_size)
+
     def _SaveJson(self):
         self.out_md.to_json(self.savepath, orient="index", indent=4)
         return
@@ -67,6 +75,13 @@ class MetadataPreprocess:
         self.smap.get(fext, lambda: 'Invalid File Extension')()
         print(f"Metadata file created in {self.savepath}.")
         return
+
+    def ExportTrainTestSplit(self):
+        parentdir = dirname(self.savepath)
+        if not os.path.isdir(parentdir):
+            os.makedirs(parentdir)
+        with open(self.ttsplit_dest, "w") as f:
+            json.dump(self.train_test_dict, f)
 
 
 class MammoPreprocess:
@@ -223,16 +238,18 @@ def main(args):
                                                       cfgs.normalization)
         mcfgs = Dict(yaml.load(open(cfgs.metadata_cfile, "r"), Loader=yaml.Loader))
         mdata_prep = MetadataPreprocess(cfgs.metadata_src, cfgs.metadata_dest,
-                                                             mcfgs)
+                                                             cfgs.traintest_dest, mcfgs)
     else:
         data_prep = MammoPreprocess(args.source, args.destination,
                                                       args.file_extension, args.resolution,
                                                       args.normalization)
         mcfgs = Dict(yaml.load(open(args.metadata_cfile, "r"), Loader=yaml.Loader))
         mdata_prep = MetadataPreprocess(args.metadata_src, args.metadata_dest,
-                                                             mcfgs)
+                                                             args.traintest_dest, mcfgs)
     mdata_prep.GenerateMetadata()
+    mdata_prep.GenerateTrainEvalSplit()
     mdata_prep.Save()
+    mdata_prep.ExportTrainTestSplit()
     data_prep.GenerateDataset()
 
 
@@ -262,6 +279,8 @@ if __name__ == "__main__":
                         help=("[PATH] Filepath to metadata file."))
     parser.add_argument("metadata_dest", metavar="mdd", nargs="?", type=str, default=None, action=ProcessPath,
                         help=("[PATH] Filepath to save processed metadata file."))
+    parser.add_argument("traintest_dest", metavar="tts", nargs="?", type=str, default=None, action=ProcessPath,
+                        help=("[PATH] Filepath to save train and test set dictionary."))
     parser.add_argument("metadata_cfile", metavar="mdc", nargs="?", type=str, default=None, action=ProcessPath,
                         help=("[PATH] Filepath to metadata configurations file."))
     args = parser.parse_args()
