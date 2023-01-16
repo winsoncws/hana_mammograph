@@ -7,3 +7,4 @@ traintest_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/traintest
 file_extension: "h5"
 resolution: [512, 512]
 normalization: True
+test_size: 0.2
