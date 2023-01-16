@@ -19,12 +19,12 @@ from sklearn.model_selection import train_test_split
 
 class MetadataPreprocess:
 
-    def __init__(self, src, dest, ttsplit_dest, cfgs):
+    def __init__(self, src, dest, ttsplit_dest, test_size, cfgs):
         self.mdpath = abspath(src)
         self.savepath = abspath(dest)
         self.inp_md = pd.read_csv(self.mdpath)
         self.out_md = None
-        self.test_size = cfgs.test_size
+        self.test_size = test_size
         self.train_test_dict = {}
         self.ttsplit_dest = ttsplit_dest
 
@@ -238,14 +238,14 @@ def main(args):
                                                       cfgs.normalization)
         mcfgs = Dict(yaml.load(open(cfgs.metadata_cfile, "r"), Loader=yaml.Loader))
         mdata_prep = MetadataPreprocess(cfgs.metadata_src, cfgs.metadata_dest,
-                                                             cfgs.traintest_dest, mcfgs)
+                                                             cfgs.traintest_dest, cfgs.test_size, mcfgs)
     else:
         data_prep = MammoPreprocess(args.source, args.destination,
                                                       args.file_extension, args.resolution,
                                                       args.normalization)
         mcfgs = Dict(yaml.load(open(args.metadata_cfile, "r"), Loader=yaml.Loader))
         mdata_prep = MetadataPreprocess(args.metadata_src, args.metadata_dest,
-                                                             args.traintest_dest, mcfgs)
+                                                             args.traintest_dest, args.test_size, mcfgs)
     mdata_prep.GenerateMetadata()
     mdata_prep.GenerateTrainEvalSplit()
     mdata_prep.Save()
