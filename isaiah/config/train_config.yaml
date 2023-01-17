@@ -11,6 +11,7 @@ model_params: {
 dataset_params: {
     datapath: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/mammodata.h5",
     metadata_path: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/metadata.json",
+    traintest_path: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/traintestsplit.json",
     augmentations: {"contrast_brightness"},
     labels: ["laterality", "view", "cancer", "implant", "density", "age"] 
 }
@@ -20,6 +21,10 @@ optimizer_params: {
 }
 
 train_params: {
+    disable_cuda: False,
     epochs: 3,
-    savepath: "/Users/isaiah/results/20220116/densenet_01.pth"
+    batch_size: 10,
+    validation_size: 10,
+    model_path: "/Users/isaiah/results/20220116/densenet_01.pth",
+    report_path: "/Users/isaiah/results/20220117/densenet_rep_01.json"
 }
