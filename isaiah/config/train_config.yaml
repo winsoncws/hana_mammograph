@@ -4,7 +4,7 @@ model_params: {
     num_init_features: 64,
     bn_size: 4,
     drop_rate: 0,
-    num_classes: 1000,
+    num_classes: 6,
     memory_efficient: False
 }
 
@@ -22,9 +22,10 @@ optimizer_params: {
 
 train_params: {
     disable_cuda: False,
-    epochs: 3,
-    batch_size: 10,
-    validation_size: 10,
+    epochs: 100,
+    batch_size: 2,
+    validation_size: 2,
     model_path: "/Users/isaiah/results/20220116/densenet_01.pth",
-    report_path: "/Users/isaiah/results/20220117/densenet_rep_01.json"
+    report_path: "/Users/isaiah/results/20220117/densenet_rep_01.json",
+    loss_weights: [0.1, 0.2, 0.45, 0.05, 0.1, 0.1]
 }

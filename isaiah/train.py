@@ -5,9 +5,9 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from build import MammoH5Data, GroupSampler
-from build import DenseNet
-from build import PFbeta
+from modeltrain import MammoH5Data, GroupSampler
+from modeltrain import DenseNet
+from modeltrain import PFbeta
 import json
 import yaml
 from addict import Dict
@@ -30,30 +30,30 @@ class Train:
             self.device = torch.device('cpu')
 
         self.epochs = self.train_cfgs.epochs
-        self.model_path = abspath(self.train_cfgs.savepath)
+        self.model_path = abspath(self.train_cfgs.model_path)
+        self.train_report_path = abspath(self.train_cfgs.report_path)
 
-        self.labels = self.data_cfgs.label
+        self.train_report = Dict({
+            "loss": [],
+            "score": []
+        })
+
+        self.labels = self.data_cfgs.labels
         self.loss_weight_map = {}
         for i, key in enumerate(self.labels):
             self.loss_weight_map[key] = self.train_cfgs.loss_weights[i]
         self.best_weights = None
 
         self.data = MammoH5Data(self.device, self.data_cfgs)
-        self.traintest_path = self.data_cfgs.traintest_path
+        self.traintest_path = abspath(self.data_cfgs.traintest_path)
         with open(self.traintest_path, "r") as f:
             self.traintestsplit = Dict(json.load(f))
         self.train_sampler = GroupSampler(self.traintestsplit.train, shuffle=True)
-        self.val_sampler = GroupSampler(self.traintestsplit.validation, shuffle=True)
+        self.val_sampler = GroupSampler(self.traintestsplit.val, shuffle=True)
         self.batch_size = self.train_cfgs.batch_size
         self.val_size = self.train_cfgs.validation_size
         self.trainloader = DataLoader(self.data, self.batch_size, sampler=self.train_sampler)
         self.validloader = DataLoader(self.data, self.val_size, sampler=self.val_sampler)
-
-        self.train_report = Dict({
-            "loss": [],
-            "score": []
-        })
-        self.train_report_path = cfgs.train_cfgs.report_path
 
     def _CheckMakeDirs(self, filepath):
         if not isdir(dirname(filepath)):
@@ -74,14 +74,14 @@ class Train:
 
     def TrainDenseNet(self):
         self.best_weights = None
-        self.model = DenseNet(self.model_cfgs)
+        self.model = DenseNet(**self.model_cfgs)
         self.model.to(self.device)
         self.optimizer = Adam(self.model.parameters(), **cfgs.optim_params)
         met_name = "PFbeta"
-        a = torch.from_numpy(np.array([self.loss_weight_map[key] for key in self.labels],
-                                               dtype=np.float32))
-        c1 = nn.BCELoss(a[:4])
-        c2 = nn.L1Loss(a[4:])
+        a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
+                                               dtype=np.float32)).to(self.device)
+        c1 = nn.BCELoss(reduction="none")
+        c2 = nn.L1Loss(reduction="none")
         loss = torch.tensor(0.)
         best_score = 0.
         for epoch in range(1, self.epochs + 1):
@@ -90,8 +90,8 @@ class Train:
             self.model.train()
             for batch, (img_id, inp, gt) in enumerate(self.trainloader):
                 out = self.model(inp)
-                loss = c1(out[:4], gt[:4]) + c2(out[4:], gt[4:])
-                self.train_report.append(loss)
+                loss = torch.sum(a[:, :4]*c1(out[:, :4], gt[:, :4])) + torch.sum(a[:, 4:]*c2(out[:, 4:], gt[:, 4:]))
+                self.train_report.loss.append(loss)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -101,9 +101,9 @@ class Train:
             self.model.eval()
             img_id, vi, vt = next(iter(self.validloader))
             preds = self.model(vi)
-            sco = PFbeta(preds.item()[3], vt.item()[3], beta=0.5)
+            sco = PFbeta(preds[:, 3], vt[:, 3], beta=0.5)
             self.train_report.score.append(sco)
-            print(f"epoch: {epoch}, loss: {loss.item()}, {met_name}: {sco}")
+            print(f"epoch: {epoch}, pred: {torch.mean(preds[:, 3]).item()}, {met_name}: {sco}")
             if sco > best_score:
                 self.best_weights = self.model.state_dict()
                 best_score = sco
@@ -115,6 +115,7 @@ class Train:
 if __name__ == "__main__":
 
     torch.manual_seed(42)
-    config_file: str = "/Users/isaiah/GitHub/hana_mammograph/isaiah/train_config.yaml"
+    config_file: str = "/Users/isaiah/GitHub/hana_mammograph/isaiah/config/train_config.yaml"
     cfgs = Dict(yaml.load(open(config_file, "r"), Loader=yaml.Loader))
     train = Train(cfgs)
+    train.TrainDenseNet()
