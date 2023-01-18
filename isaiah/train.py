@@ -5,12 +5,12 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from modeltrain import MammoH5Data, GroupSampler
-from modeltrain import DenseNet
-from modeltrain import PFbeta
+from dataset import MammoH5Data, GroupSampler
+from models import DenseNet
+from metrics import PFbeta
 import json
-import yaml
 from addict import Dict
+from utils import printProgressBarRatio
 
 # ViT transfer learning model? Inception net model?
 
@@ -34,6 +34,9 @@ class Train:
         self.train_report_path = abspath(self.train_cfgs.report_path)
 
         self.train_report = Dict({
+            "epoch": [],
+            "batch": [],
+            "samples": [],
             "loss": [],
             "score": []
         })
@@ -63,11 +66,13 @@ class Train:
         if self.best_weights != None:
             self._CheckMakeDirs(self.model_path)
             torch.save(self.best_weights, self.model_path)
+        print(f"Best model saved to {self.model_path}.")
 
     def SaveTrainingReport(self):
         self._CheckMakeDirs(self.train_report_path)
         with open(self.train_report_path, "w") as f:
-            f.write(self.train_report)
+            json.dump(self.train_report, f)
+        print(f"Training report saved to {self.train_report_path}.")
 
     def GetTrainingReport(self):
         return self.train_report
@@ -76,46 +81,47 @@ class Train:
         self.best_weights = None
         self.model = DenseNet(**self.model_cfgs)
         self.model.to(self.device)
-        self.optimizer = Adam(self.model.parameters(), **cfgs.optim_params)
+        self.optimizer = Adam(self.model.parameters(), **self.optimizer_cfgs)
         met_name = "PFbeta"
         a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
                                                dtype=np.float32)).to(self.device)
         c1 = nn.BCELoss(reduction="none")
         c2 = nn.L1Loss(reduction="none")
         loss = torch.tensor(0.)
-        best_score = 0.
+        best_score = np.nan
+        batches_per_epoch = int(np.ceil(len(self.trainloader) / float(self.batch_size)))
+        cancer_p = np.nan
         for epoch in range(1, self.epochs + 1):
+            self.train_report.epoch.append(epoch)
 
             # Training loop
             self.model.train()
             for batch, (img_id, inp, gt) in enumerate(self.trainloader):
+                self.train_report.batch.append(batch + 1)
+                samples = list(img_id)
+                self.train_report.samples.append(samples)
                 out = self.model(inp)
                 loss = torch.sum(a[:, :4]*c1(out[:, :4], gt[:, :4])) + torch.sum(a[:, 4:]*c2(out[:, 4:], gt[:, 4:]))
-                self.train_report.loss.append(loss)
+                self.train_report.loss.append(loss.item())
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                print(f"batch {batch}, batch_size: {self.batch_size}, loss: {loss.item()}")
-
+                pre = f"epoch {epoch}/{self.epochs} | batch"
+                suf = f"size: {self.batch_size}, loss: {loss.item():.5f}, pred: {cancer_p:.3f}, {met_name}: {best_score:.3f}"
+                printProgressBarRatio(batch, batches_per_epoch, prefix=pre, suffix=suf, length=50)
             # Validation loop;  every epoch
             self.model.eval()
             img_id, vi, vt = next(iter(self.validloader))
             preds = self.model(vi)
+            cancer_p = torch.mean(preds[:, 3]).detach().to("cpu").item()
             sco = PFbeta(preds[:, 3], vt[:, 3], beta=0.5)
             self.train_report.score.append(sco)
-            print(f"epoch: {epoch}, pred: {torch.mean(preds[:, 3]).item()}, {met_name}: {sco}")
+
             if sco > best_score:
                 self.best_weights = self.model.state_dict()
                 best_score = sco
                 self._SaveBestModel()
-                print("Better model found and saved")
-        print(f"total epochs: {self.epochs}, final_loss: {loss.item()}, best_score: {best_score}.")
         return
 
 if __name__ == "__main__":
-
-    torch.manual_seed(42)
-    config_file: str = "/Users/isaiah/GitHub/hana_mammograph/isaiah/config/train_config.yaml"
-    cfgs = Dict(yaml.load(open(config_file, "r"), Loader=yaml.Loader))
-    train = Train(cfgs)
-    train.TrainDenseNet()
+    pass
