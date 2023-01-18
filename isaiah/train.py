@@ -9,7 +9,6 @@ from dataset import MammoH5Data, GroupSampler
 from models import DenseNet
 from metrics import PFbeta
 import json
-import yaml
 from addict import Dict
 from utils import printProgressBarRatio
 
@@ -67,11 +66,13 @@ class Train:
         if self.best_weights != None:
             self._CheckMakeDirs(self.model_path)
             torch.save(self.best_weights, self.model_path)
+        print(f"Best model saved to {self.model_path}.")
 
     def SaveTrainingReport(self):
         self._CheckMakeDirs(self.train_report_path)
         with open(self.train_report_path, "w") as f:
             json.dump(self.train_report, f)
+        print(f"Training report saved to {self.train_report_path}.")
 
     def GetTrainingReport(self):
         return self.train_report
@@ -80,7 +81,7 @@ class Train:
         self.best_weights = None
         self.model = DenseNet(**self.model_cfgs)
         self.model.to(self.device)
-        self.optimizer = Adam(self.model.parameters(), **cfgs.optim_params)
+        self.optimizer = Adam(self.model.parameters(), **self.optimizer_cfgs)
         met_name = "PFbeta"
         a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
                                                dtype=np.float32)).to(self.device)
@@ -120,14 +121,7 @@ class Train:
                 self.best_weights = self.model.state_dict()
                 best_score = sco
                 self._SaveBestModel()
-                print(f"Better model found in epoch {epoch} and saved")
         return
 
 if __name__ == "__main__":
-
-    torch.manual_seed(42)
-    config_file: str = "/Users/isaiah/GitHub/hana_mammograph/isaiah/config/train_config.yaml"
-    cfgs = Dict(yaml.load(open(config_file, "r"), Loader=yaml.Loader))
-    train = Train(cfgs)
-    train.TrainDenseNet()
-    train.SaveTrainingReport()
+    pass
