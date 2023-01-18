@@ -9,9 +9,9 @@ model_params: {
 }
 
 dataset_params: {
-    datapath: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/mammodata.h5",
-    metadata_path: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/metadata.json",
-    traintest_path: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/traintestsplit.json",
+    datapath: "/home/isaiah/kaggle/mammo/preprocessed/mammodata.h5",
+    metadata_path: "/home/isaiah/kaggle/mammo/preprocessed/metadata.json",
+    traintest_path: "/home/isaiah/kaggle/mammo/preprocessed/traintestsplit.json",
     augmentations: {"contrast_brightness"},
     labels: ["laterality", "view", "cancer", "implant", "density", "age"] 
 }
@@ -22,10 +22,10 @@ optimizer_params: {
 
 train_params: {
     disable_cuda: False,
-    epochs: 100,
-    batch_size: 2,
-    validation_size: 2,
-    model_path: "/Users/isaiah/results/20220116/densenet_01.pth",
-    report_path: "/Users/isaiah/results/20220117/densenet_rep_01.json",
+    epochs: 3,
+    batch_size: 400,
+    validation_size: 2000,
+    model_path: "/home/isaiah/kaggle/mammo/results/20220118/densenet_01.pth",
+    report_path: "/home/isaiah/kaggle/mammo/results/20220118/densenet_rep_01.json",
     loss_weights: [0.1, 0.2, 0.45, 0.05, 0.1, 0.1]
 }
