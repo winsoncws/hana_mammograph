@@ -12,21 +12,22 @@ import matplotlib.pyplot as plt
 import ast
 import argparse
 from addict import Dict
+import json
 import h5py
 import yaml
-import json
-from sklearn.model_selection import train_test_split
+from utils import printProgressBarRatio
+
+# to time script
+import time
 
 class MetadataPreprocess:
 
-    def __init__(self, src, dest, ttsplit_dest, test_size, cfgs):
+    def __init__(self, src, dest, test_size, cfgs):
         self.mdpath = abspath(src)
         self.savepath = abspath(dest)
         self.inp_md = pd.read_csv(self.mdpath)
         self.out_md = None
         self.test_size = test_size
-        self.train_test_dict = {}
-        self.ttsplit_dest = ttsplit_dest
 
         if cfgs.default_value == 'na':
             self.default_value = np.nan
@@ -56,9 +57,6 @@ class MetadataPreprocess:
         md.set_index('image_id', inplace=True)
         self.out_md = md
 
-    def GenerateTrainEvalSplit(self):
-        self.train_test_dict["Train"], self.train_test_dict["Test"] = train_test_split(self.out_md.index, test_size=self.test_size)
-
     def _SaveJson(self):
         self.out_md.to_json(self.savepath, orient="index", indent=4)
         return
@@ -75,14 +73,6 @@ class MetadataPreprocess:
         self.smap.get(fext, lambda: 'Invalid File Extension')()
         print(f"Metadata file created in {self.savepath}.")
         return
-
-    def ExportTrainTestSplit(self):
-        parentdir = dirname(self.savepath)
-        if not os.path.isdir(parentdir):
-            os.makedirs(parentdir)
-        with open(self.ttsplit_dest, "w") as f:
-            json.dump(self.train_test_dict, f)
-
 
 class MammoPreprocess:
 
@@ -174,29 +164,29 @@ class MammoPreprocess:
         return
 
     def _GenerateFolderTreeDataset(self):
-        no_of_files = 0
-        for file in self.datafiles:
+        for i, file in enumerate(self.datafiles):
             parentdir = dirname(file[self.src_len:])
             name = file[self.src_len:].split(".", 1)[0]
             os.makedirs(join(self.savepath, parentdir), exist_ok=True)
             im = self.ProcessDicom(file)
             sfile = os.path.join(self.savepath, name + "." + self.fext)
             self._Save(sfile, im)
-            no_of_files += 1
-        print(f"{self.savepath} created. Total of {str(no_of_files)} images.")
+            printProgressBarRatio(i + 1, len(self.datafiles), prefix="Preprocessing",
+                                  suffix="Images")
+        print(f"{self.savepath} created.")
         return
 
     def _GenerateH5Dataset(self):
         hdf = h5py.File(self.savepath, "w")
-        no_of_files = 0
-        for file in self.datafiles:
+        for i, file in enumerate(self.datafiles):
             name = basename(file).split(".", 1)[0]
             im = self.ProcessDicom(file)
             hdf.create_dataset(name, data=im, compression="gzip",
                                compression_opts=9)
-            no_of_files += 1
+            printProgressBarRatio(i + 1, len(self.datafiles), prefix="Preprocessing",
+                                  suffix="Images")
         hdf.close()
-        print(f"{self.savepath} created. Total of {str(no_of_files)} images.")
+        print(f"{self.savepath} created.")
         return
 
     def GenerateDataset(self):
@@ -231,26 +221,61 @@ class ConvertList(argparse.Action):
         setattr(namespace, self.dest, values)
 
 def main(args):
+    timesheet = Dict()
     if args.cfgs != None:
         cfgs = Dict(yaml.load(open(args.cfgs, "r"), Loader=yaml.Loader))
+        prep_init_start = time.time()
         data_prep = MammoPreprocess(cfgs.source, cfgs.destination,
                                                       cfgs.file_extension, cfgs.resolution,
                                                       cfgs.normalization)
+        prep_init_end = time.time()
+        prep_init_time = prep_init_end - prep_init_start
+
         mcfgs = Dict(yaml.load(open(cfgs.metadata_cfile, "r"), Loader=yaml.Loader))
+        md_init_start = time.time()
         mdata_prep = MetadataPreprocess(cfgs.metadata_src, cfgs.metadata_dest,
-                                                             cfgs.traintest_dest, cfgs.test_size, mcfgs)
+                                                             cfgs.traintest_dest, mcfgs)
+        md_init_end = time.time()
+        md_init_time = md_init_end - md_init_start
     else:
+        prep_init_start = time.time()
         data_prep = MammoPreprocess(args.source, args.destination,
                                                       args.file_extension, args.resolution,
                                                       args.normalization)
+        prep_init_end = time.time()
+        prep_init_time = prep_init_end - prep_init_start
+
         mcfgs = Dict(yaml.load(open(args.metadata_cfile, "r"), Loader=yaml.Loader))
+        md_init_start = time.time()
         mdata_prep = MetadataPreprocess(args.metadata_src, args.metadata_dest,
-                                                             args.traintest_dest, args.test_size, mcfgs)
+                                                             args.traintest_dest, mcfgs)
+        md_init_end = time.time()
+        md_init_time = md_init_end - md_init_start
+
+    md_proc_start = time.time()
     mdata_prep.GenerateMetadata()
-    mdata_prep.GenerateTrainEvalSplit()
     mdata_prep.Save()
-    mdata_prep.ExportTrainTestSplit()
+    md_proc_end = time.time()
+    md_proc_time = md_proc_end - md_proc_start
+
+    prep_proc_start = time.time()
     data_prep.GenerateDataset()
+    prep_proc_end = time.time()
+    prep_proc_time = prep_proc_end - prep_proc_start
+
+    timesheet.metadata.initialization = md_init_time
+    timesheet.metadata.process = md_proc_time
+    timesheet.preprocessing.initialization = prep_init_time
+    timesheet.preprocessing.process = prep_proc_time
+
+    if args.cfgs != None:
+        with open(cfgs.timesheet_dest, "w") as f:
+            json.dump(timesheet, f, indent=4)
+    else:
+        with open(args.timesheet_dest, "w") as f:
+            json.dump(timesheet, f, indent=4)
+    print(f"Timesheet created in {cfgs.timesheet_dest}.")
+
 
 
 if __name__ == "__main__":
@@ -279,10 +304,10 @@ if __name__ == "__main__":
                         help=("[PATH] Filepath to metadata file."))
     parser.add_argument("metadata_dest", metavar="mdd", nargs="?", type=str, default=None, action=ProcessPath,
                         help=("[PATH] Filepath to save processed metadata file."))
-    parser.add_argument("traintest_dest", metavar="tts", nargs="?", type=str, default=None, action=ProcessPath,
-                        help=("[PATH] Filepath to save train and test set dictionary."))
     parser.add_argument("metadata_cfile", metavar="mdc", nargs="?", type=str, default=None, action=ProcessPath,
                         help=("[PATH] Filepath to metadata configurations file."))
+    parser.add_argument("timesheet_dest", metavar="tsd", nargs="?", type=str, default=None, action=ProcessPath,
+                        help=("[PATH] Filepath to save timesheet."))
     args = parser.parse_args()
 
     main(args)
