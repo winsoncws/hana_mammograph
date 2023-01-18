@@ -31,7 +31,7 @@ class ProcessPath(argparse.Action):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config-file", metavar="PATH", nargs="*",
+    parser.add_argument("-c", "--config-file", metavar="PATH", nargs="?",
                         dest="cfgs", default="",
                         help=("Dataset YAML configuration file, all other "
                               "arguments ignored if this is passed."))
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     if args.cfgs:
         config_file = os.path.abspath(args.cfgs)
         cfgs = Dict(yaml.load(open(config_file, "r"), Loader=yaml.Loader))
-        main(cfgs.metadata_dest, cfgs.traintest_path, cfgs.test_size)
+        main(cfgs.metadata_dest, cfgs.traintest_dest, cfgs.test_size)
     else:
         main(args.source, args.destination, args.test_size)
 
