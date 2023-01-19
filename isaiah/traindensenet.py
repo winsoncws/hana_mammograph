@@ -8,6 +8,7 @@ import argparse
 import yaml
 import shutil
 from addict import Dict
+import time
 
 def main(args):
     torch.manual_seed(42)
@@ -23,8 +24,13 @@ def main(args):
     shutil.copy(args.cfgs, cp_path)
 
     train = Train(cfgs)
+    start = time.time()
     train.TrainDenseNet()
+    end = time.time()
     train.SaveTrainingReport()
+    start_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))
+    end_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end))
+    print(f"Start Time: {start_s}, End Time: {end_s}, Total Time Taken: {(end-start)/3600.:.3f} hrs")
 
 if __name__ == "__main__":
 
