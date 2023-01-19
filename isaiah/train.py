@@ -117,7 +117,7 @@ class Train:
             preds = self.model(vi)
             cancer_p = torch.mean(preds[:, 3]).detach().to("cpu").item()
             sco = PFbeta(preds[:, 3], vt[:, 3], beta=0.5)
-            self.train_report.score.append(sco)
+            self.train_report.score.append(sco.item())
 
             if sco > best_score:
                 self.best_weights = self.model.state_dict()
