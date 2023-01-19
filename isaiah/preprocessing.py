@@ -77,11 +77,12 @@ class MetadataPreprocess:
 class MammoPreprocess:
 
     def __init__(self, source_directory, savepath, file_extension="png",
-                 resolution=None, normalize=False):
+                 resolution=None, ds_ratio=3., normalize=False):
         self.src = abspath(source_directory)
         self.src_len= len(self.src) + 1
         self.savepath = abspath(savepath)
         self.res = resolution
+        self.init_res = [int(n * ds_ratio) for n in self.res]
         self.fext = file_extension
         self.data_methods = {
                                          'png': self._GenerateFolderTreeDataset,
@@ -98,21 +99,24 @@ class MammoPreprocess:
                                                 recursive=True)
         self.normit = normalize
 
+        self.img_id = None
+
     def ProportionInvert(self, im, alpha=0.7):
         p = np.sum(im[im == np.max(im)])/np.prod(im.shape)
         if p > alpha:
             im = im.max() - im
         return im
 
-    def JoinCompressPad(self, im):
+    def Compress(self, im, resolution):
+        if np.max(resolution) > np.max(im.shape):
+            print(f"WARNING: {self.img_id} input image size is smaller than output image size.")
+        else:
+            end_shape = (np.asarray(resolution) * (im.shape/np.max(im.shape))).astype(np.int16)[::-1]
+            im = cv2.resize(im, dsize=end_shape, interpolation=cv2.INTER_CUBIC)
+        return im
+
+    def Pad(self, im):
         h, w = im.shape
-        if self.res != None:
-            if np.max(self.res) > np.max(im.shape):
-                print("WARNING: Input image size is smaller than output image size.")
-            else:
-                end_shape = (np.asarray(self.res) * (im.shape/np.max(im.shape))).astype(np.int16)[::-1]
-                im = cv2.resize(im, dsize=end_shape, interpolation=cv2.INTER_CUBIC)
-                w, h = end_shape
         diff = np.abs(h - w)
         if h > w:
             top, bot, left, right = [0, 0, diff // 2, diff - (diff // 2)]
@@ -122,10 +126,13 @@ class MammoPreprocess:
                                     borderType=cv2.BORDER_CONSTANT, value=0.)
         return im_pad
 
-    def ThresCrop(self, im, offset=5):
+    def MinThreshold(self, im, offset=5):
         min_x = np.min(im)
         mask = np.ones_like(im, dtype=np.int8)
         mask[im < min_x + offset] = 0
+        return mask
+
+    def LargestObjCrop(self, im, mask):
         mask, _ = label(mask)
         # # ignore the first index of stats because it is the background
         _, stats = np.unique(mask, return_counts=True)
@@ -138,9 +145,15 @@ class MammoPreprocess:
     def ProcessDicom(self, file):
         ds = pydicom.dcmread(file)
         im = ds.pixel_array
+        self.img_id = ds.InstanceNumber
+        if self.res != None:
+            im = self.Compress(im, self.init_res)
         im = self.ProportionInvert(im)
-        im = self.ThresCrop(im)
-        im = self.JoinCompressPad(im)
+        mask = self.MinThreshold(im)
+        im = self.LargestObjCrop(im, mask)
+        if self.res != None:
+            im = self.Compress(im, self.res)
+        im = self.Pad(im)
         if self.normit:
             im= cv2.normalize(im, None, alpha=0, beta=1,
                                               norm_type=cv2.NORM_MINMAX,
@@ -227,6 +240,7 @@ def main(args):
         prep_init_start = time.time()
         data_prep = MammoPreprocess(cfgs.source, cfgs.destination,
                                                       cfgs.file_extension, cfgs.resolution,
+                                                      cfgs.init_downsample_ratio,
                                                       cfgs.normalization)
         prep_init_end = time.time()
         prep_init_time = prep_init_end - prep_init_start
@@ -241,6 +255,7 @@ def main(args):
         prep_init_start = time.time()
         data_prep = MammoPreprocess(args.source, args.destination,
                                                       args.file_extension, args.resolution,
+                                                      args.init_downsample_ratio,
                                                       args.normalization)
         prep_init_end = time.time()
         prep_init_time = prep_init_end - prep_init_start
@@ -290,6 +305,9 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--resolution", metavar="INT,INT",
                         dest="resolution", nargs="?", default=None, action=ConvertList,
                         help=("Desired resolution of the output images."))
+    parser.add_argument("-d", "--downsample-ratio", metavar="FLOAT",
+                        dest="init_downsample_ratio", nargs="?", default=None,
+                        help=("Ratio of initial downsampled image to final resolution."))
     parser.add_argument("-n", "--normalize", action="store_true",
                         dest="normalization",
                         help=("Normalize the image to within 0, 1. "))
