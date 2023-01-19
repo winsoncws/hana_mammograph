@@ -3,6 +3,7 @@ from os.path import isdir, abspath, dirname
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from dataset import MammoH5Data, GroupSampler
@@ -85,7 +86,7 @@ class Train:
         met_name = "PFbeta"
         a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
                                                dtype=np.float32)).to(self.device)
-        c1 = nn.BCELoss(reduction="none")
+        c1 = nn.BCEWithLogitsLoss(reduction="none")
         c2 = nn.L1Loss(reduction="none")
         loss = torch.tensor(0.)
         best_score = np.nan
@@ -102,7 +103,7 @@ class Train:
                 self.train_report.samples.append(samples)
                 out = self.model(inp)
                 loss = torch.sum(a[:, :4]*c1(out[:, :4], gt[:, :4])) + torch.sum(a[:, 4:]*c2(out[:, 4:], gt[:, 4:]))
-                self.train_report.loss.append(loss.item())
+                self.train_report.loss.append(loss.detach().to("cpu").numpy())
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -110,6 +111,7 @@ class Train:
                 suf = f"size: {self.batch_size}, loss: {loss.item():.5f}, pred: {cancer_p:.3f}, {met_name}: {best_score:.3f}"
                 printProgressBarRatio(batch, batches_per_epoch, prefix=pre, suffix=suf, length=50)
             # Validation loop;  every epoch
+            print(epoch)
             self.model.eval()
             img_id, vi, vt = next(iter(self.validloader))
             preds = self.model(vi)
@@ -119,8 +121,11 @@ class Train:
 
             if sco > best_score:
                 self.best_weights = self.model.state_dict()
-                best_score = sco
+                best_score = sco.item()
                 self._SaveBestModel()
+
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
         return
 
 if __name__ == "__main__":

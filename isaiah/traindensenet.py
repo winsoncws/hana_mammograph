@@ -2,6 +2,7 @@ import sys, os
 from os.path import abspath, dirname, join, basename, isdir
 os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES']='1'
+os.environ['CUDA_LAUNCH_BLOCKING']='1'
 import torch
 from train import Train
 import argparse

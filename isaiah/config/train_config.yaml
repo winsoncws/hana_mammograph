@@ -23,9 +23,9 @@ optimizer_params: {
 train_params: {
     disable_cuda: False,
     epochs: 3,
-    batch_size: 400,
-    validation_size: 2000,
-    model_path: "/home/isaiah/kaggle/mammo/results/20220118/densenet_01.pth",
-    report_path: "/home/isaiah/kaggle/mammo/results/20220118/densenet_rep_01.json",
+    batch_size: 10,
+    validation_size: 7,
+    model_path: "/home/isaiah/kaggle/mammo/results/20220119/densenet_01.pth",
+    report_path: "/home/isaiah/kaggle/mammo/results/20220119/densenet_rep_01.json",
     loss_weights: [0.1, 0.2, 0.45, 0.05, 0.1, 0.1]
 }
