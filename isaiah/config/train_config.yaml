@@ -1,4 +1,5 @@
 model_params: {
+    gpu_id: 0,
     growth_rate: 32,
     block_config: [6, 12, 24, 16],
     num_init_features: 64,
