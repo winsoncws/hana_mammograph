@@ -5,9 +5,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import DataLoader
 from torch.optim import Adam
-from torch.utils.data.distributed import DistributedSampler
-from dataset import MammoH5Data, GroupDataLoader
+from dataset import MammoH5Data, GroupDistributedSampler
 from models import DenseNet
 from metrics import PFbeta
 import json
@@ -55,12 +55,12 @@ class Train:
         self.traintest_path = abspath(self.data_cfgs.traintest_path)
         with open(self.traintest_path, "r") as f:
             self.traintestsplit = Dict(json.load(f))
-        self.train_sampler = DistributedSampler(self.traintestsplit.train, shuffle=True)
-        self.val_sampler = DistributedSampler(self.traintestsplit.val, shuffle=True)
+        self.train_sampler = GroupDistributedSampler(self.traintestsplit.train, shuffle=True)
+        self.val_sampler = GroupDistributedSampler(self.traintestsplit.val, shuffle=True)
         self.batch_size = self.train_cfgs.batch_size
         self.val_size = self.train_cfgs.validation_size
-        self.trainloader = GroupDataLoader(self.data, self.batch_size, sampler=self.train_sampler)
-        self.validloader = GroupDataLoader(self.data, self.val_size, sampler=self.val_sampler)
+        self.trainloader = DataLoader(self.data, self.batch_size, sampler=self.train_sampler)
+        self.validloader = DataLoader(self.data, self.val_size, sampler=self.val_sampler)
 
     def _CheckMakeDirs(self, filepath):
         if not isdir(dirname(filepath)):
