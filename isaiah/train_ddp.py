@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.optim import Adam
-from dataset import MammoH5Data, GroupDistributedSampler
+from dataset import MammoH5Data, GroupDistSampler
 from models import DenseNet
 from metrics import PFbeta
 import json
@@ -18,20 +18,15 @@ from utils import printProgressBarRatio
 
 class Train:
 
-    def __init__(self, cfgs):
+    def __init__(self, gpu_id, cfgs):
+        assert torch.cuda.is_available()
         self.model_cfgs = cfgs.model_params
         self.optimizer_cfgs = cfgs.optimizer_params
         self.data_cfgs = cfgs.dataset_params
         self.train_cfgs = cfgs.train_params
 
-        self.gpu_id = self.model_cfgs.gpu_id
-
-        if not self.train_cfgs.no_gpu and torch.cuda.is_available():
-            self.device = torch.device('cuda')
-        elif not self.train_cfgs.no_gpu and torch.backends.mps.is_available():
-            self.device = torch.device("mps")
-        else:
-            self.device = torch.device('cpu')
+        self.device = "cuda"
+        self.gpu_id = gpu_id
 
         self.epochs = self.train_cfgs.epochs
         self.model_path = abspath(self.train_cfgs.model_path)
@@ -55,8 +50,8 @@ class Train:
         self.traintest_path = abspath(self.data_cfgs.traintest_path)
         with open(self.traintest_path, "r") as f:
             self.traintestsplit = Dict(json.load(f))
-        self.train_sampler = GroupDistributedSampler(self.traintestsplit.train, shuffle=True)
-        self.val_sampler = GroupDistributedSampler(self.traintestsplit.val, shuffle=True)
+        self.train_sampler = GroupDistSampler(self.traintestsplit.train, shuffle=True)
+        self.val_sampler = GroupDistSampler(self.traintestsplit.val, shuffle=True)
         self.batch_size = self.train_cfgs.batch_size
         self.val_size = self.train_cfgs.validation_size
         self.trainloader = DataLoader(self.data, self.batch_size, sampler=self.train_sampler)
@@ -86,13 +81,11 @@ class Train:
         self.model = DenseNet(**self.model_cfgs)
         self.model.to(self.device)
         self.optimizer = Adam(self.model.parameters(), **self.optimizer_cfgs)
-        self.model = DDP(model, device_ids=[self.gpu_id])
         met_name = "PFbeta"
         a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
                                                dtype=np.float32)).to(self.device)
-        c1 = nn.BCEWithLogitsLoss(reduction="none")
-        c2 = nn.L1Loss(reduction="none")
-        loss = torch.tensor(0.)
+        loss = torch.tensor(0.).to(self.device)
+        self.model = DDP(self.model, device_ids=[self.gpu_id])
         best_score = np.nan
         batches_per_epoch = int(np.ceil(len(self.trainloader) / float(self.batch_size)))
         cancer_p = np.nan
@@ -102,20 +95,21 @@ class Train:
             # Training loop
             self.model.train()
             for batch, (img_id, inp, gt) in enumerate(self.trainloader):
+                self.optimizer.zero_grad()
                 self.train_report.batch.append(batch + 1)
                 samples = list(img_id)
                 self.train_report.samples.append(samples)
                 out = self.model(inp)
-                loss = torch.sum(a[:, :4]*c1(out[:, :4], gt[:, :4])) + torch.sum(a[:, 4:]*c2(out[:, 4:], gt[:, 4:]))
-                self.train_report.loss.append(loss.detach().to("cpu").numpy())
-                self.optimizer.zero_grad()
+                c1 = F.binary_cross_entropy_with_logits(out[:, :4], gt[:, :4], reduce=False)
+                c2 = F.l1_loss(out[:, 4:], gt[:, 4:], reduce=False)
+                loss = torch.sum(a[:, :4]*c1) + torch.sum(a[:, 4:]*c2)
                 loss.backward()
                 self.optimizer.step()
+                self.train_report.loss.append(loss.detach().to("cpu").numpy())
                 pre = f"epoch {epoch}/{self.epochs} | batch"
                 suf = f"size: {self.batch_size}, loss: {loss.item():.5f}, pred: {cancer_p:.3f}, {met_name}: {best_score:.3f}"
                 printProgressBarRatio(batch, batches_per_epoch, prefix=pre, suffix=suf, length=50)
             # Validation loop;  every epoch
-            print(epoch)
             self.model.eval()
             img_id, vi, vt = next(iter(self.validloader))
             preds = self.model(vi)
@@ -127,9 +121,6 @@ class Train:
                 self.best_weights = self.model.module.state_dict()
                 best_score = sco.item()
                 self._SaveBestModel()
-
-            if self.device == "cuda":
-                torch.cuda.empty_cache()
         return
 
 if __name__ == "__main__":

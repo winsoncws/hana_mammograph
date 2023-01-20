@@ -123,9 +123,6 @@ class Train:
                 self.best_weights = self.model.state_dict()
                 best_score = sco.item()
                 self._SaveBestModel()
-
-            if self.device == "cuda":
-                torch.cuda.empty_cache()
         return
 
 if __name__ == "__main__":
