@@ -1,12 +1,13 @@
 source: "/home/dataset/kaggle/input/train_images/"
-destination: "/home/isaiah/kaggle/mammo/preprocessed/mammodata_224.h5"
+destination: "/home/isaiah/kaggle/mammo/preprocessed/mammodata224.h5"
 metadata_src: "/home/dataset/kaggle/input/train.csv"
 metadata_dest: "/home/isaiah/kaggle/mammo/preprocessed/metadata.json"
 metadata_cfile: "/home/isaiah/hana_mammograph/isaiah/config/metadata_config.yaml"
-traintest_dest: "/home/isaiah/kaggle/mammo/preprocessed/traintestsplit.json"
+traintest_dest: "/home/isaiah/kaggle/mammo/preprocessed/demo1000split.json"
 timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/timesheet.json"
 file_extension: "h5"
 init_downsample_ratio: 2.5
 resolution: [224, 224]
 normalization: True
 test_size: 0.25
+num_samples: 1000

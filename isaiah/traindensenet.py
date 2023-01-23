@@ -11,6 +11,8 @@ from addict import Dict
 import time
 
 def main(args):
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     torch.manual_seed(42)
     cfgs = Dict(yaml.load(open(abspath(args.cfgs), "r"), Loader=yaml.Loader))
     train_cfile = args.cfgs
@@ -27,10 +29,18 @@ def main(args):
     start = time.time()
     train.TrainDenseNet()
     end = time.time()
+    print("\n")
     train.SaveTrainingReport()
     start_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))
     end_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end))
-    print(f"Start Time: {start_s}, End Time: {end_s}, Total Time Taken: {(end-start)/3600.:.3f} hrs")
+    time_taken = end - start
+    if time_taken > 3600.:
+        divisor = 3600.
+        suffix = "hr"
+    else:
+        divisor = 60.
+        suffix = "min"
+    print(f"Start Time: {start_s}, End Time: {end_s}, Total Time Taken: {(time_taken)/divisor:.3f} {suffix}")
 
 if __name__ == "__main__":
 

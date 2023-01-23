@@ -32,6 +32,7 @@ class Train:
 
         self.epochs = self.train_cfgs.epochs
         self.model_path = abspath(self.train_cfgs.model_path)
+        self.model_final_path = abspath(self.train_cfgs.final_model_path)
         self.train_report_path = abspath(self.train_cfgs.report_path)
 
         self.train_report = Dict({
@@ -67,7 +68,12 @@ class Train:
         if self.best_weights != None:
             self._CheckMakeDirs(self.model_path)
             torch.save(self.best_weights, self.model_path)
-        print(f"Best model saved to {self.model_path}.")
+            print(f"Best model saved to {self.model_path}.")
+
+    def _SaveFinalModel(self):
+        self._CheckMakeDirs(self.final_model_path)
+        torch.save(self.model_weights, self.final_model_path)
+        print(f"Final model saved to {self.final_model_path}.")
 
     def SaveTrainingReport(self):
         self._CheckMakeDirs(self.train_report_path)
@@ -86,11 +92,9 @@ class Train:
         met_name = "PFbeta"
         a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
                                                dtype=np.float32)).to(self.device)
-        c1 = nn.BCEWithLogitsLoss(reduction="none")
-        c2 = nn.L1Loss(reduction="none")
-        loss = torch.tensor(0.)
+        loss = torch.tensor(0.).to(self.device)
         best_score = np.nan
-        batches_per_epoch = int(np.ceil(len(self.trainloader) / float(self.batch_size)))
+        batches_per_epoch = len(self.trainloader)
         cancer_p = np.nan
         for epoch in range(1, self.epochs + 1):
             self.train_report.epoch.append(epoch)
@@ -102,27 +106,31 @@ class Train:
                 samples = list(img_id)
                 self.train_report.samples.append(samples)
                 out = self.model(inp)
-                loss = torch.sum(a[:, :4]*c1(out[:, :4], gt[:, :4])) + torch.sum(a[:, 4:]*c2(out[:, 4:], gt[:, 4:]))
-                self.train_report.loss.append(loss.detach().to("cpu").numpy())
+                c1 = F.binary_cross_entropy_with_logits(out[:, :4], gt[:, :4], reduction="none")
+                c2 = F.l1_loss(out[:, 4:], gt[:, 4:], reduction="none")
+                loss = torch.sum(a[:, :4]*c1) + torch.sum(a[:, 4:]*c2)
+                self.train_report.loss.append(loss.detach().to("cpu").tolist())
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
                 pre = f"epoch {epoch}/{self.epochs} | batch"
                 suf = f"size: {self.batch_size}, loss: {loss.item():.5f}, pred: {cancer_p:.3f}, {met_name}: {best_score:.3f}"
                 printProgressBarRatio(batch, batches_per_epoch, prefix=pre, suffix=suf, length=50)
-            # Validation loop;  every epoch
-            print(epoch)
-            self.model.eval()
-            img_id, vi, vt = next(iter(self.validloader))
-            preds = self.model(vi)
-            cancer_p = torch.mean(preds[:, 3]).detach().to("cpu").item()
-            sco = PFbeta(preds[:, 3], vt[:, 3], beta=0.5)
-            self.train_report.score.append(sco.item())
 
-            if sco > best_score:
-                self.best_weights = self.model.state_dict()
-                best_score = sco.item()
-                self._SaveBestModel()
+            # Validation loop;  every epoch
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
+            self.model.eval()
+            for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
+                preds = torch.sigmoid(self.model(vi))
+                sco = PFbeta(vt[:, 3], preds[:, 3], beta=0.5)
+                cancer_p = torch.mean(preds[:, 3]).detach().to("cpu").item()
+                if sco > best_score:
+                    best_score = sco
+                    self.best_weights = self.model.state_dict()
+            self.train_report.score.append(float(best_score))
+            self._SaveBestModel()
+        self._SaveFinalModel()
         return
 
 if __name__ == "__main__":
