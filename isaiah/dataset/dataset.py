@@ -23,12 +23,11 @@ T_co = TypeVar('T_co', covariant=True)
 
 class MammoH5Data(Dataset):
 
-    def __init__(self, device, cfgs):
+    def __init__(self, device, datapath, metadata_path, cfgs):
         super().__init__()
         self.device = device
-        self.datapath =abspath(cfgs.datapath)
-        self.metadata_path = abspath(cfgs.metadata_path)
-        self.traintest_path = abspath(cfgs.traintest_path)
+        self.datapath =abspath(datapath)
+        self.metadata_path = abspath(metadata_path)
         self.metadata = None
         self.md_fext_map = {
             "json": self._ReadJson,
@@ -185,12 +184,14 @@ if __name__ == "__main__":
     else:
         device = torch.device('cpu')
 
-    cfilepath: str = "/Users/isaiah/GitHub/hana_mammograph/isaiah/config/train_config.yaml"
+    cfilepath: str = "/Users/isaiah/GitHub/hana_mammograph/isaiah/config/config.yaml"
     cfgs = Dict(yaml.load(open(cfilepath, "r"), Loader=yaml.Loader))
-    train_data = MammoH5Data(device, cfgs.dataset_params)
-    with open(cfgs.dataset_params.traintest_path, "r") as f:
-        traintestsplit = json.load(f)
-    my_sampler = GroupSampler(traintestsplit["train"], shuffle=True)
+    paths = cfgs.paths
+    train_data = MammoH5Data(device, paths.data_dest, paths.metadata_dest,
+                             paths.data_ids_dest, cfgs.dataset_params)
+    with open(paths.data_ids_dest, "r") as f:
+        data_ids = json.load(f)
+    my_sampler = GroupSampler(data_ids["train"], shuffle=True)
     train_loader = DataLoader(train_data, batch_size=2, sampler=my_sampler)
     for i, (img_id, inp, gt) in enumerate(train_loader):
         print(inp.shape)

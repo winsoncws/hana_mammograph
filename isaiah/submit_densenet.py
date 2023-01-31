@@ -3,7 +3,7 @@ from os.path import abspath, dirname, join, basename, isdir
 os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES']='1'
 import torch
-from train import Train
+from submission import Submission
 import argparse
 import yaml
 import shutil
@@ -11,8 +11,8 @@ from addict import Dict
 import time
 
 def SaveConfigFile(src, paths):
-    results_path = dirname(abspath(paths.model_ckpts_dest))
-    model_id = paths.model_ckpts_dest.split(".", 1)[0][-2:]
+    results_path = dirname(abspath(paths.submission_path))
+    model_id = paths.submission_path.split(".", 1)[0][-2:]
     filename = basename(src).split(".", 1)[0] + "_" + model_id + ".yaml"
     cp_path = join(results_path, filename)
 
@@ -28,9 +28,10 @@ def main(args):
     src = args.cfgs
     SaveConfigFile(src, cfgs.paths)
 
-    train = Train(cfgs)
+    submit = Submission(cfgs)
     start = time.time()
-    train.TrainDenseNet()
+    submit.Run()
+    submit.ExportSubmissionCSV()
     end = time.time()
     print("\n")
     start_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))

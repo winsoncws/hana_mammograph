@@ -22,12 +22,11 @@ import time
 
 class MetadataPreprocess:
 
-    def __init__(self, src, dest, test_size, cfgs):
+    def __init__(self, src, dest, cfgs):
         self.mdpath = abspath(src)
         self.savepath = abspath(dest)
         self.inp_md = pd.read_csv(self.mdpath)
         self.out_md = None
-        self.test_size = test_size
 
         if cfgs.default_value == 'na':
             self.default_value = np.nan
@@ -44,15 +43,19 @@ class MetadataPreprocess:
 
     def GenerateMetadata(self):
         md = self.inp_md[self.cols].copy()
-        if self.age_nan == "mean":
+        if self.age_nan == "mean" and self.age_nan:
             md.age.mask(md.age.isna(), md.age.mean(), inplace=True)
-        else:
+        elif self.age_nan:
             md = md[md.age.notna()]
-        md.laterality = md.laterality.map(self.lmap, na_action="ignore")
-        md.view = md.view.map(self.vmap, na_action="ignore")
-        md.density = md.density.map(self.dmap, na_action="ignore")
-        md.density.mask(md.density.isna(), 0, inplace=True)
-        md.difficult_negative_case = md.difficult_negative_case.map(self.dncmap, na_action="ignore")
+        if self.lmap:
+            md.laterality = md.laterality.map(self.lmap, na_action="ignore")
+        if self.vmap:
+            md.view = md.view.map(self.vmap, na_action="ignore")
+        if self.dmap:
+            md.density = md.density.map(self.dmap, na_action="ignore")
+            md.density.mask(md.density.isna(), 0, inplace=True)
+        if self.dncmap:
+            md.difficult_negative_case = md.difficult_negative_case.map(self.dncmap, na_action="ignore")
         md.dropna(inplace=True)
         md.set_index('image_id', inplace=True)
         self.out_md = md
@@ -238,17 +241,19 @@ def main(args):
     if args.cfgs != None:
         cfgs = Dict(yaml.load(open(args.cfgs, "r"), Loader=yaml.Loader))
         prep_init_start = time.time()
-        data_prep = MammoPreprocess(cfgs.source, cfgs.destination,
-                                                      cfgs.file_extension, cfgs.resolution,
-                                                      cfgs.init_downsample_ratio,
-                                                      cfgs.normalization)
+        paths = cfgs.paths
+        pcfgs = cfgs.preprocess_params
+        data_prep = MammoPreprocess(paths.data_src, paths.data_dest,
+                                                      pcfgs.file_extension, pcfgs.resolution,
+                                                      pcfgs.init_downsample_ratio,
+                                                      pcfgs.normalization)
         prep_init_end = time.time()
         prep_init_time = prep_init_end - prep_init_start
 
-        mcfgs = Dict(yaml.load(open(cfgs.metadata_cfile, "r"), Loader=yaml.Loader))
+        mcfgs = cfgs.metadata_params
         md_init_start = time.time()
-        mdata_prep = MetadataPreprocess(cfgs.metadata_src, cfgs.metadata_dest,
-                                                             cfgs.traintest_dest, mcfgs)
+        mdata_prep = MetadataPreprocess(paths.metadata_src, paths.metadata_dest,
+                                        mcfgs)
         md_init_end = time.time()
         md_init_time = md_init_end - md_init_start
     else:
@@ -263,7 +268,7 @@ def main(args):
         mcfgs = Dict(yaml.load(open(args.metadata_cfile, "r"), Loader=yaml.Loader))
         md_init_start = time.time()
         mdata_prep = MetadataPreprocess(args.metadata_src, args.metadata_dest,
-                                                             args.traintest_dest, mcfgs)
+                                        mcfgs)
         md_init_end = time.time()
         md_init_time = md_init_end - md_init_start
 
@@ -284,12 +289,13 @@ def main(args):
     timesheet.preprocessing.process = prep_proc_time
 
     if args.cfgs != None:
-        with open(cfgs.timesheet_dest, "w") as f:
+        with open(paths.timesheet_dest, "w") as f:
             json.dump(timesheet, f, indent=4)
+        print(f"Timesheet created in {paths.timesheet_dest}.")
     else:
         with open(args.timesheet_dest, "w") as f:
             json.dump(timesheet, f, indent=4)
-    print(f"Timesheet created in {cfgs.timesheet_dest}.")
+        print(f"Timesheet created in {args.timesheet_dest}.")
 
 
 

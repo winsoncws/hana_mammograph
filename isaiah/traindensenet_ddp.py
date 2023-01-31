@@ -20,15 +20,15 @@ def ddp_setup(rank, world_size):
     os.environ["MASTER_PORT"] = "12355"
     init_process_group(backend="nccl", rank=rank, world_size=world_size)
 
-def SaveConfigFile(cfgs):
-    results_path = dirname(abspath(cfgs.train_params.model_path))
-    model_id = cfgs.train_params.model_path.split(".", 1)[0][-2:]
-    filename = basename(args.cfgs).split(".", 1)[0] + "_" + model_id + ".yaml"
+def SaveConfigFile(src, paths):
+    results_path = dirname(abspath(paths.paths.model_ckpts_dest))
+    model_id = paths.paths.model_ckpts_dest.split(".", 1)[0][-2:]
+    filename = basename(src).split(".", 1)[0] + "_" + model_id + ".yaml"
     cp_path = join(results_path, filename)
 
     if not isdir(results_path):
         os.makedirs(results_path)
-    shutil.copy(args.cfgs, cp_path)
+    shutil.copy(src, cp_path)
 
 def PrintTimeStats(start, end):
     start_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))
@@ -58,8 +58,9 @@ if __name__ == "__main__":
                         dest="cfgs", nargs="?", default=None,
                         help=("Training configuration yaml file."))
     args = parser.parse_args()
+    src = args.cfgs
     cfgs = Dict(yaml.load(open(abspath(args.cfgs), "r"), Loader=yaml.Loader))
-    SaveConfigFile(cfgs)
+    SaveConfigFile(src, cfgs.paths)
     world_size = torch.cuda.device_count()
     start = time.time()
     mp.spawn(main, args=(world_size, cfgs), nprocs=world_size)

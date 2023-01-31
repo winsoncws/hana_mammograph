@@ -18,10 +18,20 @@ from utils import printProgressBarRatio
 class Train:
 
     def __init__(self, cfgs):
+        self.paths = cfgs.paths
         self.model_cfgs = cfgs.model_params
         self.optimizer_cfgs = cfgs.optimizer_params
         self.data_cfgs = cfgs.dataset_params
-        self.train_cfgs = cfgs.train_params
+        self.train_cfgs = cfgs.run_params
+
+        self.model_weights = None
+
+        self.ckpts_path = abspath(self.paths.model_ckpts_dest)
+        self.model_final_path = abspath(self.paths.model_final_dest)
+        self.train_report_path = abspath(self.paths.train_report_path)
+        self.data_path = abspath(self.paths.data_dest)
+        self.metadata_path = abspath(self.paths.metadata_dest)
+        self.data_ids_path = abspath(self.paths.data_ids_dest)
 
         if not self.train_cfgs.no_gpu and torch.cuda.is_available():
             self.device = torch.device('cuda')
@@ -31,9 +41,6 @@ class Train:
             self.device = torch.device('cpu')
 
         self.epochs = self.train_cfgs.epochs
-        self.model_path = abspath(self.train_cfgs.model_path)
-        self.model_final_path = abspath(self.train_cfgs.final_model_path)
-        self.train_report_path = abspath(self.train_cfgs.report_path)
 
         self.train_report = Dict({
             "epoch": [],
@@ -47,14 +54,13 @@ class Train:
         self.loss_weight_map = {}
         for i, key in enumerate(self.labels):
             self.loss_weight_map[key] = self.train_cfgs.loss_weights[i]
-        self.best_weights = None
 
-        self.data = MammoH5Data(self.device, self.data_cfgs)
-        self.traintest_path = abspath(self.data_cfgs.traintest_path)
-        with open(self.traintest_path, "r") as f:
-            self.traintestsplit = Dict(json.load(f))
-        self.train_sampler = GroupSampler(self.traintestsplit.train, shuffle=True)
-        self.val_sampler = GroupSampler(self.traintestsplit.val, shuffle=True)
+        self.data = MammoH5Data(self.device, self.data_path, self.metadata_path,
+                                self.data_cfgs)
+        with open(self.data_ids_path, "r") as f:
+            self.data_ids = Dict(json.load(f))
+        self.train_sampler = GroupSampler(self.data_ids.train, shuffle=True)
+        self.val_sampler = GroupSampler(self.data_ids.val, shuffle=True)
         self.batch_size = self.train_cfgs.batch_size
         self.val_size = self.train_cfgs.validation_size
         self.trainloader = DataLoader(self.data, self.batch_size, sampler=self.train_sampler)
@@ -65,15 +71,15 @@ class Train:
             os.makedirs(dirname(filepath))
 
     def _SaveBestModel(self):
-        if self.best_weights != None:
-            self._CheckMakeDirs(self.model_path)
-            torch.save(self.best_weights, self.model_path)
-            print(f"Best model saved to {self.model_path}.")
+        if self.model_weights != None:
+            self._CheckMakeDirs(self.ckpts_path)
+            torch.save(self.model_weights, self.ckpts_path)
+            print(f"Best model saved to {self.ckpts_path}.")
 
     def _SaveFinalModel(self):
-        self._CheckMakeDirs(self.final_model_path)
-        torch.save(self.model_weights, self.final_model_path)
-        print(f"Final model saved to {self.final_model_path}.")
+        self._CheckMakeDirs(self.model_final_path)
+        torch.save(self.model_weights, self.model_final_path)
+        print(f"Final model saved to {self.model_final_path}.")
 
     def SaveTrainingReport(self):
         self._CheckMakeDirs(self.train_report_path)
@@ -85,7 +91,6 @@ class Train:
         return self.train_report
 
     def TrainDenseNet(self):
-        self.best_weights = None
         self.model = DenseNet(**self.model_cfgs)
         self.model.to(self.device)
         self.optimizer = Adam(self.model.parameters(), **self.optimizer_cfgs)
@@ -102,17 +107,17 @@ class Train:
             # Training loop
             self.model.train()
             for batch, (img_id, inp, gt) in enumerate(self.trainloader):
-                self.train_report.batch.append(batch + 1)
+                self.optimizer.zero_grad()
                 samples = list(img_id)
-                self.train_report.samples.append(samples)
                 out = self.model(inp)
                 c1 = F.binary_cross_entropy_with_logits(out[:, :4], gt[:, :4], reduction="none")
                 c2 = F.l1_loss(out[:, 4:], gt[:, 4:], reduction="none")
                 loss = torch.sum(a[:, :4]*c1) + torch.sum(a[:, 4:]*c2)
-                self.train_report.loss.append(loss.detach().to("cpu").tolist())
-                self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+                self.train_report.batch.append(batch + 1)
+                self.train_report.samples.append(samples)
+                self.train_report.loss.append(loss.detach().to("cpu").tolist())
                 pre = f"epoch {epoch}/{self.epochs} | batch"
                 suf = f"size: {self.batch_size}, loss: {loss.item():.5f}, pred: {cancer_p:.3f}, {met_name}: {best_score:.3f}"
                 printProgressBarRatio(batch, batches_per_epoch, prefix=pre, suffix=suf, length=50)
@@ -121,15 +126,19 @@ class Train:
             if self.device == "cuda":
                 torch.cuda.empty_cache()
             self.model.eval()
+            preds = []
+            labels = []
             for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
-                preds = torch.sigmoid(self.model(vi))
-                sco = PFbeta(vt[:, 3], preds[:, 3], beta=0.5)
-                cancer_p = torch.mean(preds[:, 3]).detach().to("cpu").item()
-                if sco > best_score:
-                    best_score = sco
-                    self.best_weights = self.model.state_dict()
-            self.train_report.score.append(float(best_score))
-            self._SaveBestModel()
+                preds.extend(torch.sigmoid(self.model(vi))[:, 3].detach().to("cpu").tolist())
+                labels.extend(vt[:, 3].detach().to("cpu").tolist())
+            sco = PFbeta(labels, preds, beta=0.5)
+            self.train_report.score.append(float(sco))
+            if sco > best_score:
+                best_score = sco
+                self.model_weights = self.model.state_dict()
+                self._SaveBestModel()
+        self.model_weights = self.model.state_dict()
+        self.SaveTrainingReport()
         self._SaveFinalModel()
         return
 
