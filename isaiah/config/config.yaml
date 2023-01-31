@@ -1,5 +1,5 @@
 paths: {
-    data_src: "/Users/isaiah/datasets/kaggle_mammograph/",
+    data_src: "/Users/isaiah/datasets/kaggle_mammograph/train_images/",
     data_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/mammotrain224.h5",
     metadata_src: "/Users/isaiah/datasets/kaggle_mammograph/train.csv",
     metadata_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/metadata.json",

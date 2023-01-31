@@ -1,12 +1,12 @@
 paths: {
-    data_src: "/Users/isaiah/datasets/kaggle_mammograph/",
+    data_src: "/Users/isaiah/datasets/kaggle_mammograph/test_images/",
     data_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/mammosub224.h5",
-    metadata_src: "/Users/isaiah/datasets/kaggle_mammograph/train.csv",
+    metadata_src: "/Users/isaiah/datasets/kaggle_mammograph/test.csv",
     metadata_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/metasub.json",
     data_ids_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/submission_split.json",
     timesheet_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/sub_timesheet.json",
-    model_load_src: "/Users/isaiah/datasets/kaggle_mammograph/results/20220130/densenet_final_01.pth",
-    submission_path: "/Users/isaiah/datasets/kaggle_mammograph/results/20220130/submission.csv"
+    model_load_src: "/Users/isaiah/datasets/kaggle_mammograph/results/20230130/densenet_final_01.pth",
+    submission_path: "/Users/isaiah/datasets/kaggle_mammograph/submission/20230131/submission.csv"
 }
 
 preprocess_params: {
@@ -22,8 +22,8 @@ preprocess_params: {
 metadata_params: {
     selected_columns: ['image_id', 'patient_id', 'laterality', 'view'],
     default_value: 'na',
-    laterality_map: {0: 'L', 1: 'R'},
-    view_map: {0: 'CC', 1: 'MLO'}
+    laterality_map: {'L': 0, 'R': 1},
+    view_map: {'CC': 0, 'MLO': 1}
 }
 
 dataset_params: {
@@ -45,5 +45,8 @@ run_params: {
     train: False,
     disable_cuda: False,
     batch_size: 1,
-    loss_weights: [0.1, 0.2, 0.45, 0.05, 0.1, 0.1]
+    loss_weights: [0.1, 0.2, 0.45, 0.05, 0.1, 0.1],
+    default_value: 'na',
+    laterality_map: {0: 'L', 1: 'R'},
+    view_map: {0: 'CC', 1: 'MLO'}
 }
