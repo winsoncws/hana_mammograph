@@ -197,7 +197,6 @@ class MammoPreprocess:
             self._Save(sfile, im)
             printProgressBarRatio(i + 1, len(self.datafiles), prefix="Preprocessing",
                                   suffix="Images")
-        print(f"{self.savepath} created.")
         return
 
     def _GenerateH5Dataset(self):
@@ -210,11 +209,14 @@ class MammoPreprocess:
             printProgressBarRatio(i + 1, len(self.datafiles), prefix="Preprocessing",
                                   suffix="Images")
         hdf.close()
-        print(f"{self.savepath} created.")
         return
 
     def GenerateDataset(self):
+        parentdir = dirname(self.savepath)
+        if not os.path.isdir(parentdir):
+            os.makedirs(parentdir)
         self.data_methods.get(self.fext, lambda: "Invalid output dataset.")()
+        print(f"{self.savepath} created.")
         return
 
 class ProcessPath(argparse.Action):
@@ -297,10 +299,16 @@ def main(args):
     timesheet.preprocessing.process = prep_proc_time
 
     if args.cfgs != None:
+        parentdir = dirname(paths.timesheet_dest)
+        if not os.path.isdir(parentdir):
+            os.makedirs(parentdir)
         with open(paths.timesheet_dest, "w") as f:
             json.dump(timesheet, f, indent=4)
         print(f"Timesheet created in {paths.timesheet_dest}.")
     else:
+        parentdir = dirname(args.timesheet_dest)
+        if not os.path.isdir(parentdir):
+            os.makedirs(parentdir)
         with open(args.timesheet_dest, "w") as f:
             json.dump(timesheet, f, indent=4)
         print(f"Timesheet created in {args.timesheet_dest}.")
