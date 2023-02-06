@@ -67,13 +67,13 @@ def ExploreTestSet(testsetpath, metadatapath):
 
 def CreateDummyTestSet(metadatapath, savepath):
     md = pd.read_json(metadatapath, orient="index")
-    cancer_ids = md.loc[md.cancer == 1].index.to_set()
-    non_cancer_ids = md.image_id.to_set() - cancer_ids
-    bal_cancer_set = cancer_ids + set(random.sample(non_cancer_ids, len(cancer_ids)))
+    cancer_ids = set(md.loc[md.cancer == 1].index)
+    non_cancer_ids = set(md.index) - cancer_ids
+    bal_cancer_set = set(random.sample(list(cancer_ids), int(len(cancer_ids)/2)) + random.sample(non_cancer_ids, int(len(cancer_ids)/2)))
     test_set_size = len(bal_cancer_set)
     split_size = int(0.01*test_set_size)
-    low_cancer_set = set(random.sample(cancer_ids, split_size)) + set(random.sample(non_cancer_ids, test_set_size - split_size))
-    high_cancer_set = set(random.sample(non_cancer_ids, split_size)) + set(random.sample(cancer_ids, test_set_size - split_size))
+    low_cancer_set = set(random.sample(cancer_ids, split_size) + random.sample(non_cancer_ids, test_set_size - split_size))
+    high_cancer_set = set(random.sample(non_cancer_ids, split_size) + random.sample(cancer_ids, test_set_size - split_size))
     test_dict = {
         "balanced_cancer": list(bal_cancer_set),
         "low_cancer": list(low_cancer_set),
