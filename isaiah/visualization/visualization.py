@@ -66,7 +66,7 @@ def ExploreTestSet(testsetpath, metadatapath):
     print(f"Proportion of cancer images in test_set: {test_md[test_md.cancer == 1].count()/float(test_md.size)}")
 
 def CreateDummyTestSet(metadatapath, savepath):
-    md = pd.read_json(metadatapath, orient="index")
+    md = pd.read_json(metadatapath, orient="index", convert_axes=False, convert_dates=False)
     cancer_ids = set(md.loc[md.cancer == 1].index)
     non_cancer_ids = set(md.index) - cancer_ids
     bal_cancer_set = set(random.sample(list(cancer_ids), int(len(cancer_ids)/2)) + random.sample(non_cancer_ids, int(len(cancer_ids)/2)))
