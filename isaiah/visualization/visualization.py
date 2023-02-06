@@ -67,7 +67,7 @@ def ExploreTestSet(testsetpath, metadatapath):
 
 def CreateDummyTestSet(metadatapath, savepath):
     md = pd.read_json(metadatapath, orient="index")
-    cancer_ids = md.loc[md.cancer == 1].image_id.to_set()
+    cancer_ids = md.loc[md.cancer == 1].index.to_set()
     non_cancer_ids = md.image_id.to_set() - cancer_ids
     bal_cancer_set = cancer_ids + set(random.sample(non_cancer_ids, len(cancer_ids)))
     test_set_size = len(bal_cancer_set)
