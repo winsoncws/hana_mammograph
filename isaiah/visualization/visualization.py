@@ -4,10 +4,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import json
 import h5py
+import random
 
-def ExploreLoss(filepath, window_size):
-    # results = pd.read_json(filepath, orient="columns")
-    with open(filepath, "r") as f:
+def ExploreLoss(reportpath, window_size):
+    # results = pd.read_json(reportpath, orient="columns")
+    with open(reportpath, "r") as f:
         results = json.load(f)
     for key in results.keys():
         print(f"{key}: {len(results[key])}")
@@ -32,8 +33,8 @@ def MovingAvg(v, size):
         avg[i] = np.mean(v[i-size:i+size])
     return avg
 
-def ExploreTestSet(filepath, datasetpath, savepath):
-    with open(filepath, "r") as f:
+def GetTestSet(reportpath, datasetpath, savepath):
+    with open(reportpath, "r") as f:
         results = json.load(f)
     train_set = set()
     all_samples = set()
@@ -48,8 +49,40 @@ def ExploreTestSet(filepath, datasetpath, savepath):
     with open(savepath, "w") as sp:
         json.dump(test_dict, sp)
 
+def ExploreTestSet(testsetpath, metadatapath):
+    with open(testsetpath, "r") as f:
+        test_dict = json.load(f)
+    test_img_ids = set([int(item) for item in test_dict["test"]])
+    md = pd.read_json(metadatapath, orient="index")
+    missing_ids = set()
+    for val in test_img_ids:
+        if val in md.index:
+            continue
+        else:
+            missing_ids.add(val)
+    final_ids = test_img_ids - missing_ids
+    test_md = md.loc[list(final_ids), :]
+    print(f"Proportion of cancer images in data: {md[md.cancer == 1].count()/float(md.size)}")
+    print(f"Proportion of cancer images in test_set: {test_md[test_md.cancer == 1].count()/float(test_md.size)}")
+
+def CreateDummyTestSet(metadatapath, savepath):
+    md = pd.read_json(metadatapath, orient="index")
+    cancer_ids = md.loc[md.cancer == 1].image_id.to_set()
+    non_cancer_ids = md.image_id.to_set() - cancer_ids
+    bal_cancer_set = cancer_ids + set(random.sample(non_cancer_ids, len(cancer_ids)))
+    test_set_size = len(bal_cancer_set)
+    split_size = int(0.01*test_set_size)
+    low_cancer_set = set(random.sample(cancer_ids, split_size)) + set(random.sample(non_cancer_ids, test_set_size - split_size))
+    high_cancer_set = set(random.sample(non_cancer_ids, split_size)) + set(random.sample(cancer_ids, test_set_size - split_size))
+    test_dict = {
+        "balanced_cancer": list(bal_cancer_set),
+        "low_cancer": list(low_cancer_set),
+        "high_cancer": list(high_cancer_set)
+    }
+    with open(savepath, "w") as f:
+        json.dump(test_dict, f)
+
 if __name__ == "__main__":
     fp = sys.argv[1]
-    fp2 = sys.argv[2]
-    sp = sys.argv[3]
-    ExploreTestSet(fp, fp2, sp)
+    sp = sys.argv[2]
+    CreateDummyTestSet(fp, sp)
