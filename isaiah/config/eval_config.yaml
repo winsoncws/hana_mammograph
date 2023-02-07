@@ -5,11 +5,12 @@ paths: {
     metadata_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/metadata.json",
     data_ids_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/train_split.json",
     timesheet_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/train_timesheet.json",
-    model_load_src: null,
+    model_load_src: "/Users/isaiah/datasets/kaggle_mammograph/submission/model_weights/20230122/densenet_final_01.pth",
     model_ckpts_dest: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/densenet_ckpt_01.pth",
     model_final_dest: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/densenet_final_01.pth",
     train_report_path: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/densenet_rep_01.json",
-    other_result_dest: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/other_results.csv"
+    other_result_dest: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/other_results.csv",
+    submission_path: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/submission.csv"
 }
 
 preprocess_params: {

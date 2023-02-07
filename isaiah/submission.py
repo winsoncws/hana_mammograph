@@ -34,16 +34,18 @@ class Submission:
 
         if not self.test_cfgs.no_gpu and torch.cuda.is_available():
             self.device = torch.device('cuda')
+            self.model_weights = torch.load(self.model_weights_path)
         elif not self.test_cfgs.no_gpu and torch.backends.mps.is_available():
             self.device = torch.device("mps")
+            self.model_weights = torch.load(self.model_weights_path, map_location=self.device)
         else:
             self.device = torch.device('cpu')
+            self.model_weights = torch.load(self.model_weights_path, map_location=self.device)
 
         self.for_submission = self.test_cfgs.submission
         self.labels = self.data_cfgs.labels
         self.default_value = self.test_cfgs.default_value
         self.lmap = defaultdict(lambda: self.default_value, self.test_cfgs.laterality_map)
-        self.model_weights = torch.load(self.model_weights_path)
         self.results = None
         self.other_res = None
 
