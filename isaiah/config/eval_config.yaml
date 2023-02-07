@@ -36,7 +36,7 @@ metadata_params: {
 
 dataset_params: {
     augmentations: {"contrast_brightness"},
-    labels: ["laterality", "view", "cancer", "implant", "density", "age"] 
+    labels: ["patient_id", "laterality", "view", "cancer", "implant", "density", "age"] 
 }
 
 optimizer_params: {

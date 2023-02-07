@@ -11,8 +11,8 @@ from addict import Dict
 import time
 
 def SaveConfigFile(src, paths):
-    results_path = dirname(abspath(paths.submission_path))
-    model_id = paths.submission_path.split(".", 1)[0][-2:]
+    results_path = dirname(abspath(paths.train_report_path))
+    model_id = paths.train_report_path.split(".", 1)[0][-2:]
     filename = basename(src).split(".", 1)[0] + "_" + model_id + ".yaml"
     cp_path = join(results_path, filename)
 

@@ -108,7 +108,6 @@ def main(cfile, random_submission_path, test_metadata_path):
             submit = Submission(cfgs)
             start = time.time()
             submit.Run()
-            submit.ExportSubmissionCSV()
             end = time.time()
             print("\n")
             start_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))
@@ -128,7 +127,7 @@ def main(cfile, random_submission_path, test_metadata_path):
     return
 
 if __name__ == "__main__":
-    config_file = os.path.join(repo, "config/test_config.yaml")
+    config_file = os.path.join(repo, "config/eval_config.yaml")
     save_path = "/home/isaiah/submission.csv"
     test_md_path = "/home/dataset/kaggle/input/test.csv"
     main(config_file, save_path, test_md_path)
