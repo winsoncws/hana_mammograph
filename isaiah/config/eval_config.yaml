@@ -1,16 +1,16 @@
 paths: {
-    data_src: "/Users/isaiah/datasets/kaggle_mammograph/train_images/",
-    data_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/mammodata224.h5",
-    metadata_src: "/Users/isaiah/datasets/kaggle_mammograph/train.csv",
-    metadata_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/metadata.json",
-    data_ids_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/train_split.json",
-    timesheet_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/train_timesheet.json",
-    model_load_src: "/Users/isaiah/datasets/kaggle_mammograph/submission/model_weights/20230122/densenet_final_01.pth",
-    model_ckpts_dest: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/densenet_ckpt_01.pth",
-    model_final_dest: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/densenet_final_01.pth",
-    train_report_path: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/densenet_rep_01.json",
-    other_result_dest: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/other_results.csv",
-    submission_path: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/submission.csv"
+    data_src: "/home/isaiah/kaggle/mammo/train_images/",
+    data_dest: "/home/isaiah/kaggle/mammo/preprocessed/mammodata224.h5",
+    metadata_src: "/home/isaiah/kaggle/mammo/train.csv",
+    metadata_dest: "/home/isaiah/kaggle/mammo/preprocessed/metadata.json",
+    data_ids_dest: "/home/isaiah/kaggle/mammo/results/20230122/dummy_tests.json",
+    timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
+    model_load_src: "/home/isaiah/kaggle/mammo/results/20230122/densenet_final_01.pth",
+    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230207/densenet_ckpt_01.pth",
+    model_final_dest: "/home/isaiah/kaggle/mammo/results/20230207/densenet_final_01.pth",
+    train_report_path: "/home/isaiah/kaggle/mammo/results/20230207/densenet_rep_01.json",
+    other_result_dest: "/home/isaiah/kaggle/mammo/results/20230207/other_results.csv",
+    submission_path: "/home/isaiah/kaggle/mammo/results/20230207/submission.csv"
 }
 
 preprocess_params: {
@@ -58,8 +58,11 @@ run_params: {
     submission: False,
     train: False,
     disable_cuda: False,
+    dataset: "balanced_cancer",
     epochs: 3,
     batch_size: 2,
     validation_size: 2,
+    default_value: 'na',
+    laterality_map: {1: 'L', 0: 'R'},
     loss_weights: [0.1, 0.2, 0.45, 0.05, 0.1, 0.1]
 }

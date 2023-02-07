@@ -34,17 +34,18 @@ class Submission:
 
         if not self.test_cfgs.no_gpu and torch.cuda.is_available():
             self.device = torch.device('cuda')
-            self.model_weights = torch.load(self.model_weights_path)
         elif not self.test_cfgs.no_gpu and torch.backends.mps.is_available():
             self.device = torch.device("mps")
-            self.model_weights = torch.load(self.model_weights_path, map_location=self.device)
         else:
             self.device = torch.device('cpu')
-            self.model_weights = torch.load(self.model_weights_path, map_location=self.device)
 
+        self.model_weights = torch.load(self.model_weights_path, map_location=self.device)
         self.for_submission = self.test_cfgs.submission
         self.labels = self.data_cfgs.labels
-        self.default_value = self.test_cfgs.default_value
+        if self.test_cfgs.default_value == "na":
+            self.default_value = np.nan
+        else:
+            self.default_value = self.test_cfgs.default_value
         self.lmap = defaultdict(lambda: self.default_value, self.test_cfgs.laterality_map)
         self.results = None
         self.other_res = None
@@ -53,7 +54,8 @@ class Submission:
                                 self.data_cfgs)
         with open(self.data_ids_path, "r") as f:
             self.test_ids = Dict(json.load(f))
-        self.test_sampler = GroupSampler(self.test_ids.test, shuffle=True)
+        self.selected_ds = self.test_cfgs.dataset
+        self.test_sampler = GroupSampler(self.test_ids[self.selected_ds], shuffle=True)
         self.batch_size = self.test_cfgs.batch_size
         self.testloader = DataLoader(self.data, self.batch_size, sampler=self.test_sampler)
 
@@ -66,8 +68,8 @@ class Submission:
         self.results.to_csv(self.submission_path, index=True, index_label="prediction_id")
 
     def _ExportOtherCSV(self):
-        self._CheckMakeDirs(self.other_res)
-        self.other_res.to_csv(self.other_result_path, index=False)
+        self._CheckMakeDirs(self.other_result_path)
+        self.other_res.to_csv(self.other_result_path, index=True, index_label="label")
 
     def _RunSub(self):
         self.model = DenseNet(**self.model_cfgs)
@@ -102,18 +104,21 @@ class Submission:
             truths.extend(vt.detach().tolist())
             preds.extend(torch.sigmoid(self.model(vi)).detach().tolist())
             printProgressBarRatio(vbatch + 1, len(self.testloader), prefix="Samples")
-        pats = list(np.asarray(truths).astype(np.int)[0])
-        btruths = np.asarray(truths).astype(np.int)[1, :5]
+        pats = np.asarray(truths)[:, 0].astype(np.int)
+        btruths = np.asarray(truths).astype(np.int)[:, 1:5]
         dtruths = np.asarray(truths)[:, 5:]
-        bpreds = np.asarray(preds).astype(np.int)[1, :5]
+        bpreds = np.asarray(preds).astype(np.int)[:, 1:5]
         dpreds = np.asarray(preds)[:, 5:]
         acc = np.sum(bpreds == btruths, axis=0)/bpreds.shape[0]
-        lats = list(bpreds[:, 0])
+        lats = list(np.round(bpreds[:, 0]).astype(np.int))
         rlats = [self.lmap[val] for val in lats]
         pred_ids = ["_".join(item) for item in zip(map(str, pats), rlats)]
         df = pd.DataFrame(np.asarray(preds)[:, 3], index=pred_ids, columns=["cancer"])
         self.results = df.groupby(df.index)["cancer"].mean()
-        self.other_res = pd.DataFrame(acc, columns=self.labels[1:])
+        print(self.results)
+        print(acc.shape)
+        self.other_res = pd.DataFrame(acc, index=self.labels[1:5], columns=["accuracy"])
+        print(self.other_res)
 
     def Run(self):
         if self.for_submission:
