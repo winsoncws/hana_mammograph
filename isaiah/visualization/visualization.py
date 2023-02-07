@@ -6,6 +6,31 @@ import json
 import h5py
 import random
 
+def PFbeta(labels, predictions, beta, eps=1e-5):
+    # eps is a small error term added for numerical stability
+    y_true_count = 0
+    ctp = 0
+    cfp = 0
+
+    for idx in range(len(labels)):
+        prediction = min(max(predictions[idx], 0), 1)
+        if (labels[idx]):
+            y_true_count += 1
+            ctp += prediction
+        else:
+            cfp += prediction
+
+    beta_squared = beta * beta
+    c_precision = (ctp + eps) / (ctp + cfp + eps)
+    c_recall = (ctp + eps) / (y_true_count + eps)
+    print(c_precision)
+    print(c_recall)
+    if (c_precision > 0 and c_recall > 0):
+        result = (1 + beta_squared) * (c_precision * c_recall) / (beta_squared * c_precision + c_recall)
+        return result
+    else:
+        return 0.
+
 def ExploreLoss(reportpath, window_size):
     # results = pd.read_json(reportpath, orient="columns")
     with open(reportpath, "r") as f:
@@ -13,7 +38,7 @@ def ExploreLoss(reportpath, window_size):
     for key in results.keys():
         print(f"{key}: {len(results[key])}")
     loss = pd.DataFrame({"loss": results["loss"]})
-    ma = MovingAvg(loss.loss, window_size)
+    ma = MovingAvg(loss.loss, int(window_size))
     PlotLoss(loss, ma)
 
 def PlotLoss(loss, ma):
@@ -82,7 +107,23 @@ def CreateDummyTestSet(metadatapath, savepath):
     with open(savepath, "w") as f:
         json.dump(test_dict, f)
 
+def GetF1Score(metadatapath, submissionpath, savepath):
+    md = pd.read_json(metadatapath, orient="index", convert_axes=False, convert_dates=False)
+    lmap = {0: "L", 1: "R"}
+    pats = md.patient_id.to_list()
+    lats = md.laterality.to_list()
+    rlats = [lmap[val] for val in lats]
+    md["prediction_id"] = ["_".join(item) for item in zip(map(str, pats), rlats)]
+    all_labels = md.loc[:, ["prediction_id", "cancer"]].copy()
+    all_labels.drop_duplicates(inplace=True)
+    results = pd.read_csv(submissionpath)
+    gt = [int(all_labels[all_labels.prediction_id == i].cancer) for i in results.prediction_id]
+    results["gt"] = gt
+    score = PFbeta(results["gt"], results["cancer"], 1)
+    print(score)
+    results.to_csv(savepath, index=False)
+
 if __name__ == "__main__":
     fp = sys.argv[1]
-    sp = sys.argv[2]
-    CreateDummyTestSet(fp, sp)
+    size = sys.argv[2]
+    ExploreLoss(fp, size)
