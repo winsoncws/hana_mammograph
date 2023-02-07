@@ -31,7 +31,6 @@ def main(args):
     submit = Submission(cfgs)
     start = time.time()
     submit.Run()
-    submit.ExportSubmissionCSV()
     end = time.time()
     print("\n")
     start_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))

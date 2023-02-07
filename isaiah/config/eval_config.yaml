@@ -8,7 +8,8 @@ paths: {
     model_load_src: null,
     model_ckpts_dest: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/densenet_ckpt_01.pth",
     model_final_dest: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/densenet_final_01.pth",
-    train_report_path: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/densenet_rep_01.json"
+    train_report_path: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/densenet_rep_01.json",
+    other_result_dest: "/Users/isaiah/datasets/kaggle_mammograph/results/20230207/other_results.csv"
 }
 
 preprocess_params: {
@@ -53,6 +54,7 @@ model_params: {
 }
 
 run_params: {
+    submission: False,
     train: False,
     disable_cuda: False,
     epochs: 3,

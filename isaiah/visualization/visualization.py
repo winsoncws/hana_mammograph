@@ -123,6 +123,12 @@ def GetF1Score(metadatapath, submissionpath, savepath):
     print(score)
     results.to_csv(savepath, index=False)
 
+def PlotOtherScores(metadatapath, predictionpath):
+    md = pd.read_json(metadatapath, orient="index", convert_axes=False, convert_dates=False)
+
+    lats = md.laterality.to_list()
+
+
 if __name__ == "__main__":
     fp = sys.argv[1]
     size = sys.argv[2]
