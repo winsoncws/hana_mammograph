@@ -35,7 +35,7 @@ def PrintTimeStats(start, end):
     print(f"Start Time: {start_s}, End Time: {end_s}, Total Time Taken: {(time_taken)/divisor:.3f} {suffix}")
 
 def main(cfgs):
-    torch.manual_seed(42)
+    # torch.manual_seed(42)
     train = Train(cfgs)
     start = time.time()
     train.RunDDP()

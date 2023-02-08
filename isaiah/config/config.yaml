@@ -5,11 +5,11 @@ paths: {
     metadata_dest: "/home/isaiah/kaggle/mammo/preprocessed/metadata.json",
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_split.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
-    model_load_src: "/home/isaiah/kaggle/mammo/results/20230208/densenet_final_01_newformat.pth",
-    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_ckpt_02.pth",
-    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_best_02.pth",
-    model_final_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_final_02.pth",
-    train_report_path: "/home/isaiah/kaggle/mammo/results/20230208/densenet_rep_02.csv"
+    model_load_src: "/home/isaiah/kaggle/mammo/results/20230208/densenet_best_02.pth",
+    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_ckpt_03.pth",
+    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_best_03.pth",
+    model_final_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_final_03.pth",
+    train_report_path: "/home/isaiah/kaggle/mammo/results/20230208/densenet_rep_03.csv"
 }
 
 preprocess_params: {
@@ -45,8 +45,8 @@ optimizer_params: {
 }
 
 scheduler_params: {
-    base_lr: 1.0e-6,
-    max_lr: 1.0e-3,
+    base_lr: 1.0e-5,
+    max_lr: 6.0e-5,
     step_size_up: 500,
     cycle_momentum: False
 }
