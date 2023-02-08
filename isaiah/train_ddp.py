@@ -200,7 +200,7 @@ class Train:
         return
 
     def RunDDP(self):
-        mp.spawn(self._TrainDenseNetDDP, args=(self.world_size), nprocs=world_size)
+        mp.spawn(self._TrainDenseNetDDP, nprocs=self.no_of_gpus)
 
 if __name__ == "__main__":
     pass
