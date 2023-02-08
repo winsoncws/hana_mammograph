@@ -5,7 +5,7 @@ paths: {
     metadata_dest: "/home/isaiah/kaggle/mammo/preprocessed/metadata.json",
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_split.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
-    model_load_src: "/home/isaiah/kaggle/mammo/results/20230208/densenet_final_01.pth",
+    model_load_src: "/home/isaiah/kaggle/mammo/results/20230208/densenet_final_01_newformat.pth",
     model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_ckpt_02.pth",
     model_best_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_best_02.pth",
     model_final_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_final_02.pth",
