@@ -26,7 +26,7 @@ class Train:
 
     def __init__(self, cfgs):
         assert torch.cuda.is_available()
-        self.no_of_gpus = torch.cuda.device_count()
+        self.no_gpus = torch.cuda.device_count()
 
         self.paths = cfgs.paths
         self.model_cfgs = cfgs.model_params
@@ -64,8 +64,6 @@ class Train:
         for i, key in enumerate(self.labels):
             self.loss_weight_map[key] = self.train_cfgs.loss_weights[i]
 
-        self.data = MammoH5Data(self.device, self.data_path, self.metadata_path,
-                                self.data_cfgs)
         with open(self.data_ids_path, "r") as f:
             self.data_ids = Dict(json.load(f))
 
@@ -91,8 +89,10 @@ class Train:
         torch.save(state, self.model_final_path)
         print(f"Final model saved to {self.model_final_path}.")
 
-    def _TrainDenseNetDDP(gpu_id, self):
-        self.SetupDDP(gpu_id, self.no_gpus)
+    def _TrainDenseNetDDP(self, gpu_id):
+        self._SetupDDP(gpu_id, self.no_gpus)
+        self.data = MammoH5Data(gpu_id, self.data_path, self.metadata_path,
+                                self.data_cfgs)
         self.train_sampler = DoubleBalancedGroupDistSampler(self.data_ids.train.healthy,
                                                     self.data_ids.train.cancer,
                                                     shuffle=True)
@@ -105,7 +105,7 @@ class Train:
         if self.model_state != None:
             model.load_state_dict(self.model_state)
             print(f"gpu_id: {gpu_id} - model loaded.")
-        self.model = DDP(model, device_ids=[gpu_id], output_device=gpu_id)
+        self.model = DDP(model, device_ids=[gpu_id])
         self.optimizer = Adam(self.model.parameters(), **self.optimizer_cfgs)
         if self.optimizer_state != None:
             self.optimizer.load_state_dict(self.optimizer_state)
@@ -181,7 +181,7 @@ class Train:
         if gpu_id == 0:
             self._SaveFinalModel()
             log.close()
-        self.ShutdownDDP()
+        self._ShutdownDDP()
         return
 
     def _SetupDDP(self, rank, world_size):
@@ -200,7 +200,7 @@ class Train:
         return
 
     def RunDDP(self):
-        mp.spawn(self._TrainDenseNetDDP, nprocs=self.no_of_gpus)
+        mp.spawn(self._TrainDenseNetDDP, nprocs=self.no_gpus)
 
 if __name__ == "__main__":
     pass
