@@ -45,8 +45,8 @@ optimizer_params: {
 }
 
 scheduler_params: {
-    base_lr: 1e-6,
-    max_lr: 1e-3,
+    base_lr: 1.0e-6,
+    max_lr: 1.0e-3,
     step_size_up: 500,
     cycle_momentum: False
 }

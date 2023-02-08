@@ -128,7 +128,7 @@ class Train:
                 # Training loop
                 self.model.train()
                 for batch, (img_id, inp, gt) in enumerate(self.trainloader):
-                    last_lr = scheduler.get_last_lr()[0]
+                    last_lr = self.scheduler.get_last_lr()[0]
                     self.optimizer.zero_grad()
                     samples = list(img_id)
                     out = self.model(inp)
