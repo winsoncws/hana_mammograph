@@ -66,6 +66,6 @@ run_params: {
     disable_cuda: False,
     epochs: 20,
     batch_size: 30,
-    validation_size: 15,
+    validation_size: 10,
     loss_weights: [1.]
 }

@@ -1,6 +1,9 @@
 import os, sys
 from os.path import isdir, abspath, dirname
 import numpy as np
+import json
+import csv
+from addict import Dict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,13 +11,12 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
+from torch.distributed import init_process_group, destroy_process_group
+import torch.multiprocessing as mp
+from torchmetrics.functional.classification import binary_accuracy
 from dataset import MammoH5Data, DoubleBalancedGroupDistSampler
 from models import DenseNet
-from torchmetrics.functional.classification import binary_accuracy
 from metrics import PFbeta
-import json
-import csv
-from addict import Dict
 from utils import printProgressBarRatio
 
 # ViT transfer learning model? Inception net model?
@@ -22,8 +24,10 @@ from utils import printProgressBarRatio
 
 class Train:
 
-    def __init__(self, gpu_id, cfgs):
+    def __init__(self, cfgs):
         assert torch.cuda.is_available()
+        self.no_of_gpus = torch.cuda.device_count()
+
         self.paths = cfgs.paths
         self.model_cfgs = cfgs.model_params
         self.optimizer_cfgs = cfgs.optimizer_params
@@ -32,10 +36,12 @@ class Train:
         self.train_cfgs = cfgs.run_params
 
         if self.paths.model_load_src != None:
-            self.model_weights = torch.load(self.paths.model_load_src)
-            print(f"gpu_id: {gpu_id} - model weights loaded.")
+            self.model_state = torch.load(self.paths.model_load_src)["model"]
+            self.optimizer_state = torch.load(self.paths.model_load_src)["optimizer"]
+            print(f"gpu_id: {gpu_id} - model loaded.")
         else:
-            self.model_weights = None
+            self.model_state = None
+            self.optimizer_state = None
 
         self.ckpts_path = abspath(self.paths.model_ckpts_dest)
         self.model_best_path = abspath(self.paths.model_best_dest)
@@ -46,7 +52,6 @@ class Train:
         self.data_ids_path = abspath(self.paths.data_ids_dest)
 
         self.device = "cuda"
-        self.gpu_id = gpu_id
 
         self.train = self.train_cfgs.train
         self.epochs = self.train_cfgs.epochs
@@ -78,42 +83,41 @@ class Train:
             os.makedirs(dirname(filepath))
 
     def _SaveBestModel(self, value):
-        if self.model_weights != None:
+        if self.model_state != None:
             self._CheckMakeDirs(self.model_best_path)
-            torch.save(self.model_weights, self.model_best_path)
-        print(f"New best model with {self.met_name} = {value} saved to {self.model_best_path}.")
+            state = {
+                "model": self.model_state,
+                "optimizer": self.optimizer_state
+            }
+            torch.save(state, self.model_best_path)
+            print(f"New best model with {self.met_name} = {value} saved to {self.model_best_path}.")
 
     def _SaveFinalModel(self):
         self._CheckMakeDirs(self.model_final_path)
-        torch.save(self.model_weights, self.model_final_path)
+        state = {
+            "model": self.model_state,
+            "optimizer": self.optimizer_state
+        }
+        torch.save(state, self.model_final_path)
         print(f"Final model saved to {self.model_final_path}.")
 
-    def SaveTrainingReport(self):
-        self._CheckMakeDirs(self.train_report_path)
-        with open(self.train_report_path, "w") as f:
-            json.dump(self.train_report, f)
-        print(f"Training report saved to {self.train_report_path}.")
-
-    def GetTrainingReport(self):
-        return self.train_report
-
-    def TrainDenseNet(self):
-        self.model = DenseNet(**self.model_cfgs)
-        if self.model_weights != None:
-            self.model.load_state_dict(self.model_weights)
-        self.model_weights = None
-        self.model.to(self.device)
+    def _TrainDenseNetDDP(gpu_id, self):
+        self.SetupDDP(gpu_id, self.no_gpus)
+        model = DenseNet(**self.model_cfgs).to(gpu_id)
+        if self.model_state != None:
+            model.load_state_dict(self.model_state)
+        self.model = DDP(model, device_ids=[gpu_id], output_device=gpu_id)
         self.optimizer = Adam(self.model.parameters(), **self.optimizer_cfgs)
+        if self.optimizer_state != None:
+            self.optimizer.load_state_dict(self.optimizer_state)
         self.scheduler = CyclicLR(self.optimizer, **self.scheduler_cfgs)
-        a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
-                                               dtype=np.float32)).to(self.device)
-        loss = torch.tensor(0.).to(self.device)
-        self.model = DDP(self.model, device_ids=[self.gpu_id], output_device=self.gpu_id)
+        # a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
+                                               # dtype=np.float32)).to(self.device)
         bacc = 0.
         eacc = 0.
         best_score = 0.
         sco = 0.
-        if self.gpu_id == 0:
+        if gpu_id == 0:
             if os.path.exists(self.train_report_path):
                 os.remove(self.train_report_path)
             log = open(self.train_report_path, "a")
@@ -122,7 +126,7 @@ class Train:
                              "epoch_accuracy", "f1_score", "best_score"])
         for epoch in range(1, self.epochs + 1):
             if self.train:
-                # if self.gpu_id == 0:
+                # if gpu_id == 0:
                     # self.train_report.epoch.append(epoch)
 
                 # Training loop
@@ -139,11 +143,11 @@ class Train:
                     bacc = binary_accuracy(out, gt).detach().to("cpu").item()
                     loss.backward()
                     self.optimizer.step()
-                    self.scheduler.step()
                     # self.train_report.batch.append(batch + 1)
                     # self.train_report.samples.append(samples)
                     # self.train_report.loss.append(loss.detach().to("cpu").tolist())
-                    if self.gpu_id == 0:
+                    if gpu_id == 0:
+                        self.scheduler.step()
                         writer.writerow([epoch, batch + 1, last_lr, samples, loss.detach().to("cpu").item(),
                                          bacc, eacc, sco, best_score])
                         print((f"epoch {epoch}/{self.epochs} | batch_size: {self.batch_size} | "
@@ -160,19 +164,44 @@ class Train:
             eacc = np.sum(np.array(preds).round() == np.array(labels))/float(len(preds))
             sco = float(PFbeta(labels, preds, beta=0.5))
             # self.train_report.score.append(sco)
-            if self.gpu_id == 0:
+            if gpu_id == 0:
                 self._CheckMakeDirs(self.ckpts_path)
+                state = {
+                    "model": self.model.module.state_dict(),
+                    "optimizer": self.optimizer.state_dict()
+                }
                 torch.save(self.model.module.state_dict(), self.ckpts_path)
             if sco > best_score:
                 best_score = sco
-                self.model_weights = self.model.module.state_dict()
-                if self.gpu_id == 0:
+                self.model_state = self.model.module.state_dict()
+                self.optimizer_state = self.optimizer.state_dict()
+                if gpu_id == 0:
                     self._SaveBestModel(best_score)
-        self.model_weights = self.model.module.state_dict()
-        if self.gpu_id == 0:
+        self.model_state = self.model.module.state_dict()
+        self.optimizer_state = self.optimizer.state_dict()
+        if gpu_id == 0:
             self._SaveFinalModel()
             log.close()
+        self.ShutdownDDP()
         return
+
+    def _SetupDDP(self, rank, world_size):
+        """
+        Args:
+            rank: Unique identifier of each process
+            world_size: Total number of processes
+        """
+        os.environ["MASTER_ADDR"] = "localhost"
+        os.environ["MASTER_PORT"] = "12355"
+        init_process_group(backend="nccl", rank=rank, world_size=world_size)
+        return
+
+    def _ShutdownDDP(self):
+        destroy_process_group()
+        return
+
+    def RunDDP(self):
+        mp.spawn(self._TrainDenseNetDDP, args=(self.world_size), nprocs=world_size)
 
 if __name__ == "__main__":
     pass
