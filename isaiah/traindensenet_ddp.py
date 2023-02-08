@@ -21,8 +21,8 @@ def ddp_setup(rank, world_size):
     init_process_group(backend="nccl", rank=rank, world_size=world_size)
 
 def SaveOtherFiles(cfile_src, paths):
-    results_path = dirname(abspath(paths.paths.model_ckpts_dest))
-    model_id = paths.paths.model_ckpts_dest.split(".", 1)[0][-2:]
+    results_path = dirname(abspath(paths.model_ckpts_dest))
+    model_id = paths.model_ckpts_dest.split(".", 1)[0][-2:]
     filename = basename(cfile_src).split(".", 1)[0] + "_" + model_id
     cfile_dest = join(results_path, filename + ".yaml")
     traintestsplit_src = paths.data_ids_dest

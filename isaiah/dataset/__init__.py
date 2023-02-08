@@ -1,1 +1,1 @@
-from .dataset import MammoH5Data, GroupSampler, GroupDistSampler
+from .dataset import MammoH5Data, GroupSampler, GroupDistSampler, DoubleBalancedGroupDistSampler

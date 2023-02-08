@@ -8,18 +8,24 @@ from addict import Dict
 from sklearn.model_selection import train_test_split
 import ast
 import argparse
+import random
 
 def main(metadata_path, savepath, test_set=False, num_samples=None, test_size=None):
     md = pd.read_json(metadata_path, orient="index", convert_axes=False, convert_dates=False)
     output = Dict()
-    if num_samples == None:
-        indices = md.index.to_list()
-    else:
-        indices = md.index.to_list()[:num_samples]
+    pos_indices = md[md["cancer"] == 1].index.to_list()
+    neg_indices = md[md["cancer"] == 0].index.to_list()
+    if num_samples != None:
+        assert num_samples < len(pos_indices)
+        assert num_samples < len(neg_indices)
+        pos_indices = random.sample(pos_indices, num_samples)
+        neg_indices = random.sample(neg_indices, num_samples)
     if test_set:
-        output.test = indices
+        output.test.cancer = pos_indices
+        output.test.healthy = neg_indices
     else:
-        output.train, output.val = train_test_split(indices, test_size=test_size)
+        output.train.cancer, output.val.cancer = train_test_split(pos_indices, test_size=test_size)
+        output.train.healthy, output.val.healthy = train_test_split(neg_indices, test_size=test_size)
     with open(savepath, "w") as f:
         json.dump(output, f)
 
