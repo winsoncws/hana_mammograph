@@ -39,16 +39,6 @@ def PFbeta(labels, predictions, beta, eps=1e-5):
     else:
         return 0.
 
-def ExploreLoss(reportpath, window_size):
-    # results = pd.read_json(reportpath, orient="columns")
-    with open(reportpath, "r") as f:
-        results = json.load(f)
-    for key in results.keys():
-        print(f"{key}: {len(results[key])}")
-    loss = pd.DataFrame({"loss": results["loss"]})
-    ma = MovingAvg(loss.loss, int(window_size))
-    PlotLoss(loss, ma)
-
 def PlotLoss(loss, ma):
     minloss = np.min(loss.to_numpy())
     maxloss = np.max(loss.to_numpy())
@@ -66,54 +56,62 @@ def MovingAvg(v, size):
         avg[i] = np.mean(v[i-size:i+size])
     return avg
 
-def GetTestSet(reportpath, datasetpath, savepath):
+def ExploreLoss(reportpath, window_size):
+    # results = pd.read_json(reportpath, orient="columns")
     with open(reportpath, "r") as f:
         results = json.load(f)
-    train_set = set()
-    all_samples = set()
-    for batch in results["samples"]:
-        train_set.update(batch)
-    with h5py.File(datasetpath, "r") as ds:
-        ds.visit(lambda n: all_samples.add(n))
-    test_set = all_samples - train_set
-    print(len(test_set))
-    test_dict = {}
-    test_dict["test"] = list(test_set)
-    with open(savepath, "w") as sp:
-        json.dump(test_dict, sp)
+    for key in results.keys():
+        print(f"{key}: {len(results[key])}")
+    loss = pd.DataFrame({"loss": results["loss"]})
+    ma = MovingAvg(loss.loss, int(window_size))
+    PlotLoss(loss, ma)
 
-def ExploreTestSet(testsetpath, metadatapath):
-    with open(testsetpath, "r") as f:
-        test_dict = json.load(f)
-    test_img_ids = set([int(item) for item in test_dict["test"]])
-    md = pd.read_json(metadatapath, orient="index")
-    missing_ids = set()
-    for val in test_img_ids:
-        if val in md.index:
-            continue
-        else:
-            missing_ids.add(val)
-    final_ids = test_img_ids - missing_ids
-    test_md = md.loc[list(final_ids), :]
-    print(f"Proportion of cancer images in data: {md[md.cancer == 1].count()/float(md.size)}")
-    print(f"Proportion of cancer images in test_set: {test_md[test_md.cancer == 1].count()/float(test_md.size)}")
-
-def CreateDummyTestSet(metadatapath, savepath):
-    md = pd.read_json(metadatapath, orient="index", convert_axes=False, convert_dates=False)
-    cancer_ids = set(md.loc[md.cancer == 1].index)
-    non_cancer_ids = set(md.index) - cancer_ids
-    bal_cancer_set = set(random.sample(list(cancer_ids), int(len(cancer_ids)/2)) + random.sample(non_cancer_ids, int(len(cancer_ids)/2)))
-    test_set_size = len(bal_cancer_set)
-    split_size = int(0.01*test_set_size)
-    low_cancer_set = set(random.sample(cancer_ids, split_size) + random.sample(non_cancer_ids, test_set_size - split_size))
-    high_cancer_set = set(random.sample(non_cancer_ids, split_size) + random.sample(cancer_ids, test_set_size - split_size))
-    test_dict = {
-        "balanced_cancer": list(bal_cancer_set),
-        "low_cancer": list(low_cancer_set),
-        "high_cancer": list(high_cancer_set)
-    }
-    with open(savepath, "w") as f:
-        json.dump(test_dict, f)
+def Dashboard(report: pd.DataFrame, window_size: int=100):
+    loss_ma = MovingAvg(report.loss, window_size)
+    bacc_ma = MovingAvg(report.batch_accuracy, window_size)
+    lr_ma = MovingAvg(report.learning_rate, window_size)
+    num_batch_per_epoch = report.batch.max()
+    total_size = len(report.index)
+    cut_off = total_size - (total_size % num_batch_per_epoch)
+    mean_batch_acc = np.mean(report.batch_accuracy.to_numpy()[:cut_off].reshape(num_batch_per_epoch, -1), axis=0)
+    fig, axs = plt.subplots(2, 3, figsize=(12,8))
+    fig.suptitle("Training Log")
+    # plot loss
+    axs[0, 0].set_title("loss")
+    axs[0, 0].set_xlabel("batch")
+    axs[0, 0].set_ylabel("loss")
+    axs[0, 0].scatter(report.index, report.loss, s=0.3, c="red", label="value")
+    axs[0, 0].plot(report.index, loss_ma, "-b", label="moving avg")
+    axs[0, 0].legend()
+    # plot batch acc
+    axs[0, 1].set_title("batch accuracy")
+    axs[0, 1].set_xlabel("batch")
+    axs[0, 1].set_ylabel("accuracy")
+    axs[0, 1].scatter(report.index, report.batch_accuracy, s=0.3, c="red")
+    axs[0, 1].plot(report.index, bacc_ma, "-b")
+    # plot epoch acc vs mean batch_acc
+    axs[0, 2].set_title("epoch accuracy")
+    axs[0, 2].set_xlabel("epoch")
+    axs[0, 2].set_ylabel("accuracy")
+    axs[0, 2].plot(report.epoch.unique(), report.epoch_accuracy.unique(), "-r",
+                   linewidth=0.3, label="eval")
+    axs[0, 2].plot(np.arange(1,len(mean_batch_acc)+1), mean_batch_acc, "-g",
+                   linewidth=0.3, label="train")
+    axs[0, 2].legend()
+    # plot epoch PFbeta
+    axs[1, 0].set_title("F1 Score")
+    axs[1, 0].set_xlabel("epoch")
+    axs[1, 0].set_ylabel("accuracy")
+    axs[1, 0].plot(report.epoch.unique(), report.f1_score.unique(), "-r",
+                   linewidth=0.3)
+    # plot learning rate
+    axs[1, 1].set_title("Learning Rate")
+    axs[1, 1].set_xlabel("batch")
+    axs[1, 1].set_ylabel("accuracy")
+    axs[1, 1].scatter(report.index, report.learning_rate, s=0.3, c="red")
+    axs[1, 1].plot(report.index, lr_ma, "-b")
+    plt.tight_layout()
+    plt.show()
 
 def GetF1Score(metadatapath, submissionpath, savepath):
     md = pd.read_json(metadatapath, orient="index", convert_axes=False, convert_dates=False)
@@ -131,34 +129,11 @@ def GetF1Score(metadatapath, submissionpath, savepath):
     print(f"F1: {score}")
     results.to_csv(savepath, index=False)
 
-def TroubleshootDataLoader(cfile):
-    if torch.cuda.is_available():
-        device = torch.device('cuda')
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device('cpu')
-
-    cfgs = Dict(yaml.load(open(abspath(cfile), "r"), Loader=yaml.Loader))
-    paths = cfgs.paths
-    test_cfgs = cfgs.run_params
-    data_cfgs = cfgs.dataset_params
-
-    data = MammoH5Data(device, paths.data_dest, paths.metadata_dest, data_cfgs)
-    with open(paths.data_ids_dest, "r") as f:
-        data_ids = json.load(f)
-    for key, val in data_ids["val"].items():
-        print(f"{key}: {len(val)}")
-    group = test_cfgs.dataset
-    labels = test_cfgs.classes
-    batch_size = test_cfgs.batch_size
-    test_sampler = BalancedGroupSampler(data_ids[group], labels, batch_size, shuffle=True)
-    testloader = DataLoader(data, batch_size, sampler=test_sampler)
-    print(len(testloader))
-    return
 
 if __name__ == "__main__":
-    fp = sys.argv[1]
-    sp = sys.argv[2]
-    sav = sys.argv[3]
-    GetF1Score(fp, sp, sav)
+    rp = sys.argv[1]
+    ws = int(sys.argv[2])
+    if ws == None:
+        ws = 100
+    df = pd.read_csv(rp)
+    Dashboard(df, ws)
