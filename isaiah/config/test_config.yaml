@@ -1,12 +1,13 @@
 paths: {
-    data_src: "/Users/isaiah/datasets/kaggle_mammograph/test_images/",
-    data_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/mammosub224.h5",
-    metadata_src: "/Users/isaiah/datasets/kaggle_mammograph/test.csv",
-    metadata_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/metasub.json",
-    data_ids_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/submission_split.json",
-    timesheet_dest: "/Users/isaiah/datasets/kaggle_mammograph/preprocessed/sub_timesheet.json",
-    model_load_src: "/Users/isaiah/datasets/kaggle_mammograph/results/20230130/densenet_final_01.pth",
-    submission_path: "/Users/isaiah/datasets/kaggle_mammograph/submission/20230131/submission.csv"
+    data_src: "/home/dataset/kaggle/test_images/",
+    data_dest: "/home/isaiah/kaggle/mammo/preprocessed/mammodata224.h5",
+    metadata_src: "/home/dataset/kaggle/test.csv",
+    metadata_dest: "/home/isaiah/kaggle/mammo/preprocessed/metadata.json",
+    data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_split.json",
+    timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/sub_timesheet.json",
+    model_load_src: "/home/isaiah/kaggle/mammo/results/20230208/densenet_final_03.pth",
+    submission_path: "/home/isaiah/kaggle/mammo/results/20230209/submission.csv",
+    other_result_dest: "/home/isaiah/kaggle/mammo/results/20230209/other_res.csv"
 }
 
 preprocess_params: {
@@ -33,19 +34,19 @@ dataset_params: {
 
 model_params: {
     growth_rate: 32,
-    block_config: [6, 12, 24, 16],
+    block_config: [6, 12, 64, 48],
     num_init_features: 64,
     bn_size: 4,
     drop_rate: 0,
-    num_classes: 6,
+    num_classes: 1,
     memory_efficient: False
 }
 
 run_params: {
-    train: False,
+    submission: True,
     disable_cuda: False,
     batch_size: 1,
-    loss_weights: [0.1, 0.2, 0.45, 0.05, 0.1, 0.1],
+    loss_weights: [1.],
     default_value: 'na',
     laterality_map: {0: 'L', 1: 'R'},
     view_map: {0: 'CC', 1: 'MLO'},

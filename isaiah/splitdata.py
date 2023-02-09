@@ -10,7 +10,7 @@ import ast
 import argparse
 import random
 
-def main(metadata_path, savepath, test_set=False, num_samples=None, test_size=None):
+def SplitData(metadata_path, savepath, test_set=False, num_samples=None, test_size=None):
     md = pd.read_json(metadata_path, orient="index", convert_axes=False, convert_dates=False)
     output = Dict()
     pos_indices = md[md["cancer"] == 1].index.to_list()
@@ -64,10 +64,10 @@ if __name__ == "__main__":
         config_file = os.path.abspath(args.cfgs)
         cfgs = Dict(yaml.load(open(config_file, "r"), Loader=yaml.Loader))
         paths = cfgs.paths
-        main(paths.metadata_dest, paths.data_ids_dest,
+        SplitData(paths.metadata_dest, paths.data_ids_dest,
              cfgs.preprocess_params.test_set,
              cfgs.preprocess_params.num_samples,
              cfgs.preprocess_params.test_size)
     else:
-        main(args.source, args.destination, args.test_set, args.num_samples, args.test_size)
+        SplitData(args.source, args.destination, args.test_set, args.num_samples, args.test_size)
 

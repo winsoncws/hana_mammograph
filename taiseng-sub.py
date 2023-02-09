@@ -1,5 +1,5 @@
 import os, sys, platform, subprocess
-repo = "/home/isaiah/RSNABreastCancer2023/"
+repo = "/home/isaiah/hana_mammograph/isaiah/"
 sys.path.insert(0, repo)
 from os.path import join, dirname, basename, abspath
 import numpy as np
@@ -23,7 +23,7 @@ import monai
 import torchio as tio
 
 from submission import Submission
-from test_preprocessing import MammoPreprocess, MetadataPreprocess
+from preprocessing import MammoPreprocess, MetadataPreprocess
 from splitdata import SplitData
 
 def preprocess_loop(cfgs):
@@ -59,7 +59,8 @@ def main(cfile):
         torch.cuda.empty_cache()
     submit = Submission(cfgs)
     submit.Run()
+    submit.ExportSubmissionCSV()
 
 if __name__ == "__main__":
-    config_file = os.path.join(repo, "config/test_config2.yaml")
+    config_file = os.path.join(repo, "config/test_config.yaml")
     main(config_file)

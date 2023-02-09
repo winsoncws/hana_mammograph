@@ -67,5 +67,6 @@ run_params: {
     epochs: 40,
     batch_size: 20,
     validation_size: 10,
-    loss_weights: [1.]
+    loss_weights: [1.],
+    classes: ['cancer', 'healthy']
 }

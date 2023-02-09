@@ -1,10 +1,18 @@
 import sys, os
+from os.path import abspath
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import torch
+from torch.utils.data import DataLoader
 import json
 import h5py
 import random
+import yaml
+from addict import Dict
+
+from dataset import MammoH5Data, BalancedGroupSampler
+
 
 def PFbeta(labels, predictions, beta, eps=1e-5):
     # eps is a small error term added for numerical stability
@@ -128,8 +136,32 @@ def PlotOtherScores(metadatapath, predictionpath):
 
     lats = md.laterality.to_list()
 
+def TroubleshootDataLoader(cfile):
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device('cpu')
+
+    cfgs = Dict(yaml.load(open(abspath(cfile), "r"), Loader=yaml.Loader))
+    paths = cfgs.paths
+    test_cfgs = cfgs.run_params
+    data_cfgs = cfgs.dataset_params
+
+    data = MammoH5Data(device, paths.data_dest, paths.metadata_dest, data_cfgs)
+    with open(paths.data_ids_dest, "r") as f:
+        data_ids = json.load(f)
+    for key, val in data_ids["val"].items():
+        print(f"{key}: {len(val)}")
+    group = test_cfgs.dataset
+    labels = test_cfgs.classes
+    batch_size = test_cfgs.batch_size
+    test_sampler = BalancedGroupSampler(data_ids[group], labels, batch_size, shuffle=True)
+    testloader = DataLoader(data, batch_size, sampler=test_sampler)
+    print(len(testloader))
+    return
 
 if __name__ == "__main__":
     fp = sys.argv[1]
-    size = sys.argv[2]
-    ExploreLoss(fp, size)
+    TroubleshootDataLoader(fp)

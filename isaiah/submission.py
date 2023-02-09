@@ -25,7 +25,7 @@ class Submission:
         self.data_cfgs = cfgs.dataset_params
         self.test_cfgs = cfgs.run_params
 
-        self.model_weights_path = self.paths.model_load_src
+        self.model_state_path = self.paths.model_load_src
         self.submission_path = abspath(self.paths.submission_path)
         self.other_result_path = abspath(self.paths.other_result_dest)
         self.data_path = abspath(self.paths.data_dest)
@@ -39,7 +39,7 @@ class Submission:
         else:
             self.device = torch.device('cpu')
 
-        self.model_weights = torch.load(self.model_weights_path, map_location=self.device)
+        self.model_state = torch.load(self.model_state_path, map_location=self.device)["model"]
         self.for_submission = self.test_cfgs.submission
         self.labels = self.data_cfgs.labels
         if self.test_cfgs.default_value == "na":
@@ -80,8 +80,8 @@ class Submission:
 
     def _RunSub(self):
         self.model = DenseNet(**self.model_cfgs)
-        if self.model_weights != None:
-            self.model.load_state_dict(self.model_weights)
+        if self.model_state != None:
+            self.model.load_state_dict(self.model_state)
         self.model.to(self.device)
         self.model.eval()
         pats = []
@@ -90,7 +90,7 @@ class Submission:
         for vbatch, (vimg_id, vi, vt) in enumerate(self.testloader):
             pats.extend(vt.int()[:, 0].detach().tolist())
             lats.extend(vt.int()[:, 1].detach().tolist())
-            preds.extend(torch.sigmoid(self.model(vi))[:, 3].detach().tolist())
+            preds.extend(torch.sigmoid(self.model(vi)).detach().tolist())
             printProgressBarRatio(vbatch + 1, len(self.testloader), prefix="Samples")
         rlats = [self.lmap[val] for val in lats]
         pred_ids = ["_".join(item) for item in zip(map(str, pats), rlats)]
@@ -100,7 +100,7 @@ class Submission:
 
     def _RunOther(self):
         self.model = DenseNet(**self.model_cfgs)
-        self.model.load_state_dict(self.model_weights)
+        self.model.load_state_dict(self.model_state)
         self.model.to(self.device)
         self.model.eval()
         img_ids = []

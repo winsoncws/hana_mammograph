@@ -14,7 +14,7 @@ from torch.optim.lr_scheduler import CyclicLR
 from torch.distributed import init_process_group, destroy_process_group
 import torch.multiprocessing as mp
 from torchmetrics.functional.classification import binary_accuracy
-from dataset import MammoH5Data, DoubleBalancedGroupDistSampler
+from dataset import MammoH5Data, GroupSampler, DoubleBalancedGroupDistSampler
 from models import DenseNet
 from metrics import PFbeta
 from utils import printProgressBarRatio
@@ -56,6 +56,7 @@ class Train:
         self.epochs = self.train_cfgs.epochs
         self.batch_size = self.train_cfgs.batch_size
         self.val_size = self.train_cfgs.validation_size
+        self.classes = self.train_cfgs.classes
 
         self.met_name = "PFbeta"
         self.labels = self.data_cfgs.labels
@@ -93,11 +94,10 @@ class Train:
         self._SetupDDP(gpu_id, self.no_gpus)
         self.data = MammoH5Data(gpu_id, self.data_path, self.metadata_path,
                                 self.data_cfgs)
-        self.train_sampler = DoubleBalancedGroupDistSampler(self.data_ids.train.healthy,
-                                                    self.data_ids.train.cancer,
+        self.train_sampler = DoubleBalancedGroupDistSampler(self.data_ids.train[self.classes[0]],
+                                                    self.data_ids.train[self.classes[1]],
                                                     shuffle=True)
-        self.val_sampler = DoubleBalancedGroupDistSampler(self.data_ids.val.healthy,
-                                                  self.data_ids.val.cancer,
+        self.val_sampler = GroupDistSampler(self.data_ids.val[self.classes[0]] + self.data_ids.val[self.classes[1]],
                                                   shuffle=True)
         self.trainloader = DataLoader(self.data, self.batch_size, sampler=self.train_sampler)
         self.validloader = DataLoader(self.data, self.val_size, sampler=self.val_sampler)
