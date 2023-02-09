@@ -80,14 +80,14 @@ class Train:
             torch.save(state, self.model_best_path)
             print(f"New best model with {self.met_name} = {value} saved to {self.model_best_path}.")
 
-    def _SaveFinalModel(self):
+    def _SaveFinalModel(self, value):
         self._CheckMakeDirs(self.model_final_path)
         state = {
             "model": self.model_state,
             "optimizer": self.optimizer_state
         }
         torch.save(state, self.model_final_path)
-        print(f"Final model saved to {self.model_final_path}.")
+        print(f"Final model with {self.met_name} = {value} saved to {self.model_final_path}.")
 
     def _TrainDenseNetDDP(self, gpu_id):
         self._SetupDDP(gpu_id, self.no_gpus)
@@ -179,7 +179,7 @@ class Train:
         self.model_state = self.model.module.state_dict()
         self.optimizer_state = self.optimizer.state_dict()
         if gpu_id == 0:
-            self._SaveFinalModel()
+            self._SaveFinalModel(sco)
             log.close()
         self._ShutdownDDP()
         return
