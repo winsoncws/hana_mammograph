@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score
 from torch.utils.data import DataLoader
-from dataset import MammoH5Data, GroupSampler, BalancedGroupSampler
+from dataset import MammoH5Data, GroupSampler
 from models import DenseNet
 from metrics import PFbeta
 import json
@@ -57,14 +57,14 @@ class Submission:
         self.selected_ds = self.test_cfgs.dataset
         self.batch_size = self.test_cfgs.batch_size
         if self.test_cfgs.classes or self.test_cfgs.classes != None:
-            self.test_sampler = BalancedGroupSampler(self.test_ids[self.selected_ds],
-                                                     self.test_cfgs.classes,
-                                                     self.batch_size,
-                                                     shuffle=True)
+            class1 = self.test_ids[self.selected_ds][self.test_cfgs.classes[0]]
+            class2 = self.test_ids[self.selected_ds][self.test_cfgs.classes[1]]
+            self.test_sampler = GroupSampler(class1 + class2, shuffle=True)
         else:
             self.test_sampler = GroupSampler(self.test_ids[self.selected_ds],
                                              shuffle=True)
-        self.testloader = DataLoader(self.data, self.batch_size, sampler=self.test_sampler)
+        self.testloader = DataLoader(self.data, self.batch_size,
+                                     sampler=self.test_sampler)
 
     def _CheckMakeDirs(self, filepath):
         if not isdir(dirname(filepath)):

@@ -6,8 +6,8 @@ paths: {
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_split.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/sub_timesheet.json",
     model_load_src: "/home/isaiah/kaggle/mammo/results/20230208/densenet_final_03.pth",
-    submission_path: "/home/isaiah/kaggle/mammo/results/20230209/submission.csv",
-    other_result_dest: "/home/isaiah/kaggle/mammo/results/20230209/other_res.csv"
+    submission_path: "/home/isaiah/kaggle/mammo/results/20230209/submission3.csv",
+    other_result_dest: "/home/isaiah/kaggle/mammo/results/20230209/other_res3.csv"
 }
 
 preprocess_params: {

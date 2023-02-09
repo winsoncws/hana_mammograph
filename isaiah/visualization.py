@@ -31,8 +31,8 @@ def PFbeta(labels, predictions, beta, eps=1e-5):
     beta_squared = beta * beta
     c_precision = (ctp + eps) / (ctp + cfp + eps)
     c_recall = (ctp + eps) / (y_true_count + eps)
-    print(c_precision)
-    print(c_recall)
+    print(f"Precision: {c_precision}")
+    print(f"Recall: {c_recall}")
     if (c_precision > 0 and c_recall > 0):
         result = (1 + beta_squared) * (c_precision * c_recall) / (beta_squared * c_precision + c_recall)
         return result
@@ -128,13 +128,8 @@ def GetF1Score(metadatapath, submissionpath, savepath):
     gt = [int(all_labels[all_labels.prediction_id == i].cancer) for i in results.prediction_id]
     results["gt"] = gt
     score = PFbeta(results["gt"], results["cancer"], 1)
-    print(score)
+    print(f"F1: {score}")
     results.to_csv(savepath, index=False)
-
-def PlotOtherScores(metadatapath, predictionpath):
-    md = pd.read_json(metadatapath, orient="index", convert_axes=False, convert_dates=False)
-
-    lats = md.laterality.to_list()
 
 def TroubleshootDataLoader(cfile):
     if torch.cuda.is_available():
@@ -164,4 +159,6 @@ def TroubleshootDataLoader(cfile):
 
 if __name__ == "__main__":
     fp = sys.argv[1]
-    TroubleshootDataLoader(fp)
+    sp = sys.argv[2]
+    sav = sys.argv[3]
+    GetF1Score(fp, sp, sav)

@@ -59,7 +59,6 @@ def main(cfile):
         torch.cuda.empty_cache()
     submit = Submission(cfgs)
     submit.Run()
-    submit.ExportSubmissionCSV()
 
 if __name__ == "__main__":
     config_file = os.path.join(repo, "config/test_config.yaml")
