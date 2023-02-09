@@ -103,6 +103,60 @@ class GroupSampler(Sampler):
     def __len__(self):
         return len(self.indices)
 
+class BalancedGroupSampler(Sampler):
+
+    def __init__(self, group_indices: dict, labels: list, batch_size: int,
+                 shuffle=False):
+        first_group = group_indices[labels[0]]
+        second_group = group_indices[labels[1]]
+        if len(first_group) > len(second_group):
+            self.larger_group = first_group
+            self.smaller_group = second_group
+            self.balance_group = True
+        elif len(first_group) < len(second_group):
+            self.larger_group = second_group
+            self.smaller_group = first_group
+            self.balance_group = True
+        else:
+            self.larger_group = first_group
+            self.smaller_group = second_group
+            self.balance_group = False
+        self.batch_size = batch_size
+
+        padding_size = len(self.larger_group) % self.batch_size
+        if padding_size <= len(self.larger_group):
+            pad = random.sample(self.larger_group, padding_size)
+            self.larger_group += pad
+        assert len(self.larger_group) % self.batch_size == 0
+
+        if self.balance_group:
+            multiplication_factor = len(self.larger_group) // len(self.smaller_group)
+            remainder = len(self.larger_group) % len(self.smaller_group)
+            self.smaller_group = self.smaller_group * multiplication_factor + self.smaller_group[:remainder]
+            assert len(self.smaller_group) == len(self.larger_group)
+
+        self.shuffle = shuffle
+        self.num_batches = (len(self.larger_group) + len(self.smaller_group)) // self.batch_size
+
+    def __iter__(self):
+        if self.shuffle:
+            larger_sample = random.sample(self.larger_group, len(self.larger_group))
+            smaller_sample = random.sample(self.smaller_group, len(self.smaller_group))
+        else:
+            smaller_sample = copy(self.smaller_group)
+            larger_sample = copy(self.larger_group)
+
+        sorted_samples = self.sort_samples(larger_sample, smaller_sample)
+        return iter(sorted_samples)
+
+    def __len__(self):
+        return self.num_batches
+
+    def sort_samples(self, group1, group2):
+        a = np.asarray(group1).reshape((-1, self.batch_size))
+        b = np.asarray(group2).reshape((-1, self.batch_size))
+        return np.concatenate((a,b), axis=1).flatten().tolist()
+
 class GroupDistSampler(Sampler[T_co]):
 
     def __init__(self, group_ids: list,

@@ -48,5 +48,7 @@ run_params: {
     loss_weights: [0.1, 0.2, 0.45, 0.05, 0.1, 0.1],
     default_value: 'na',
     laterality_map: {0: 'L', 1: 'R'},
-    view_map: {0: 'CC', 1: 'MLO'}
+    view_map: {0: 'CC', 1: 'MLO'},
+    dataset: 'val',
+    classes: ['cancer', 'healthy']
 }
