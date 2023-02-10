@@ -13,32 +13,6 @@ from addict import Dict
 
 from dataset import MammoH5Data, BalancedGroupSampler
 
-
-def PFbeta(labels, predictions, beta, eps=1e-5):
-    # eps is a small error term added for numerical stability
-    y_true_count = 0
-    ctp = 0
-    cfp = 0
-
-    for idx in range(len(labels)):
-        prediction = min(max(predictions[idx], 0), 1)
-        if (labels[idx]):
-            y_true_count += 1
-            ctp += prediction
-        else:
-            cfp += prediction
-
-    beta_squared = beta * beta
-    c_precision = (ctp + eps) / (ctp + cfp + eps)
-    c_recall = (ctp + eps) / (y_true_count + eps)
-    print(f"Precision: {c_precision}")
-    print(f"Recall: {c_recall}")
-    if (c_precision > 0 and c_recall > 0):
-        result = (1 + beta_squared) * (c_precision * c_recall) / (beta_squared * c_precision + c_recall)
-        return result
-    else:
-        return 0.
-
 def PlotLoss(loss, ma):
     minloss = np.min(loss.to_numpy())
     maxloss = np.max(loss.to_numpy())
@@ -66,11 +40,29 @@ def ExploreLoss(reportpath, window_size):
     ma = MovingAvg(loss.loss, int(window_size))
     PlotLoss(loss, ma)
 
+def MetricsFromCM(df: pd.DataFrame, epsilon=1.0e-6):
+    tp = df["tp"].to_numpy()
+    fp = df["fp"].to_numpy()
+    tn = df["tn"].to_numpy()
+    fn = df["fn"].to_numpy()
+    tpr = (tp + epsilon)/(tp + fn + epsilon)
+    precision = (tp + epsilon)/(tp + fp + epsilon)
+    tnr = (tn + epsilon)/(fp + tn + epsilon)
+    return tpr, precision, tnr
+
 def Dashboard(report: pd.DataFrame, window_size: int=100):
     loss_ma = MovingAvg(report.loss, window_size)
     bacc_ma = MovingAvg(report.batch_accuracy, window_size)
     lr_ma = MovingAvg(report.learning_rate, window_size)
-    eacc = report.groupby("epoch").mean()[["batch_accuracy", "epoch_accuracy"]]
+    eacc = report.groupby("epoch").mean(numeric_only=True)[["batch_accuracy", "epoch_accuracy"]]
+    try:
+        ecm = report.groupby("epoch").mean(numeric_only=True)[["epoch_tp", "epoch_fp", "epoch_tn", "epoch_fn"]]
+        recall, precision, tnr = MetricsFromCM(ecm)
+        plotcm = True
+    except:
+        print("confusion matrix not present")
+        plotcm = False
+        pass
     f1_scores = report.groupby("epoch").mean(numeric_only=True)["f1_score"]
     fig, axs = plt.subplots(2, 3, figsize=(12,8))
     fig.suptitle("Training Log")
@@ -102,36 +94,30 @@ def Dashboard(report: pd.DataFrame, window_size: int=100):
     axs[1, 0].set_ylabel("accuracy")
     axs[1, 0].plot(f1_scores.index, f1_scores, "-r",
                    linewidth=0.3)
+    if plotcm:
+        # plot Recall, Precision and TNR
+        axs[1, 1].set_title("Recall, Precision and TNR")
+        axs[1, 1].set_xlabel("epoch")
+        axs[1, 1].set_ylabel("metric")
+        axs[1, 1].plot(ecm.index, recall, "-r",
+                       linewidth=0.3, label="recall")
+        axs[1, 1].plot(ecm.index, precision, "-g",
+                       linewidth=0.3, label="precision")
+        axs[1, 1].plot(ecm.index, tnr, "-b",
+                       linewidth=0.3, label="true neg rate")
+        axs[1, 1].legend()
     # plot learning rate
-    axs[1, 1].set_title("Learning Rate")
-    axs[1, 1].set_xlabel("batch")
-    axs[1, 1].set_ylabel("accuracy")
-    axs[1, 1].scatter(report.index, report.learning_rate, s=0.3, c="red")
-    axs[1, 1].plot(report.index, lr_ma, "-b")
+    axs[1, 2].set_title("Learning Rate")
+    axs[1, 2].set_xlabel("batch")
+    axs[1, 2].set_ylabel("accuracy")
+    axs[1, 2].scatter(report.index, report.learning_rate, s=0.3, c="red")
+    axs[1, 2].plot(report.index, lr_ma, "-b")
+
     plt.tight_layout()
     plt.show()
 
-def GetF1Score(metadatapath, submissionpath, savepath):
-    md = pd.read_json(metadatapath, orient="index", convert_axes=False, convert_dates=False)
-    lmap = {0: "L", 1: "R"}
-    pats = md.patient_id.to_list()
-    lats = md.laterality.to_list()
-    rlats = [lmap[val] for val in lats]
-    md["prediction_id"] = ["_".join(item) for item in zip(map(str, pats), rlats)]
-    all_labels = md.loc[:, ["prediction_id", "cancer"]].copy()
-    all_labels.drop_duplicates(inplace=True)
-    results = pd.read_csv(submissionpath)
-    gt = [int(all_labels[all_labels.prediction_id == i].cancer) for i in results.prediction_id]
-    results["gt"] = gt
-    score = PFbeta(results["gt"], results["cancer"], 1)
-    print(f"F1: {score}")
-    results.to_csv(savepath, index=False)
-
-
 if __name__ == "__main__":
-    rp = sys.argv[1]
-    ws = int(sys.argv[2])
-    if ws == None:
-        ws = 100
-    df = pd.read_csv(rp)
-    Dashboard(df, ws)
+    report_path = sys.argv[1]
+    window_size = int(sys.argv[2])
+    df = pd.read_csv(report_path)
+    Dashboard(df, window_size)
