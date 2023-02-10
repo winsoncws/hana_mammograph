@@ -175,7 +175,7 @@ class Train:
                     "model": self.model.module.state_dict(),
                     "optimizer": self.optimizer.state_dict()
                 }
-                torch.save(self.model.module.state_dict(), self.ckpts_path)
+                torch.save(state, self.ckpts_path)
             if sco > best_score:
                 best_score = sco
                 self.model_state = self.model.module.state_dict()
