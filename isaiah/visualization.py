@@ -70,10 +70,8 @@ def Dashboard(report: pd.DataFrame, window_size: int=100):
     loss_ma = MovingAvg(report.loss, window_size)
     bacc_ma = MovingAvg(report.batch_accuracy, window_size)
     lr_ma = MovingAvg(report.learning_rate, window_size)
-    num_batch_per_epoch = report.batch.max()
-    total_size = len(report.index)
-    cut_off = total_size - (total_size % num_batch_per_epoch)
-    mean_batch_acc = np.mean(report.batch_accuracy.to_numpy()[:cut_off].reshape(num_batch_per_epoch, -1), axis=0)
+    eacc = report.groupby("epoch").mean()[["batch_accuracy", "epoch_accuracy"]]
+    f1_scores = report.groupby("epoch").mean(numeric_only=True)["f1_score"]
     fig, axs = plt.subplots(2, 3, figsize=(12,8))
     fig.suptitle("Training Log")
     # plot loss
@@ -93,16 +91,16 @@ def Dashboard(report: pd.DataFrame, window_size: int=100):
     axs[0, 2].set_title("epoch accuracy")
     axs[0, 2].set_xlabel("epoch")
     axs[0, 2].set_ylabel("accuracy")
-    axs[0, 2].plot(report.epoch.unique(), report.epoch_accuracy.unique(), "-r",
+    axs[0, 2].plot(eacc.index, eacc.epoch_accuracy, "-r",
                    linewidth=0.3, label="eval")
-    axs[0, 2].plot(np.arange(1,len(mean_batch_acc)+1), mean_batch_acc, "-g",
+    axs[0, 2].plot(eacc.index, eacc.batch_accuracy, "-g",
                    linewidth=0.3, label="train")
     axs[0, 2].legend()
     # plot epoch PFbeta
     axs[1, 0].set_title("F1 Score")
     axs[1, 0].set_xlabel("epoch")
     axs[1, 0].set_ylabel("accuracy")
-    axs[1, 0].plot(report.epoch.unique(), report.f1_score.unique(), "-r",
+    axs[1, 0].plot(f1_scores.index, f1_scores, "-r",
                    linewidth=0.3)
     # plot learning rate
     axs[1, 1].set_title("Learning Rate")
