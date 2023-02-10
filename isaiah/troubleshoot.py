@@ -131,7 +131,7 @@ def TroubleshootDataLoader(cfile):
     return
 
 if __name__ == "__main__":
-    fp = sys.argv[1]
-    sp = sys.argv[2]
-    sav = sys.argv[3]
-    GetF1Score(fp, sp, sav)
+    metadata_path = sys.argv[1]
+    sub_path = sys.argv[2]
+    save_path = sys.argv[3]
+    GetF1Score(metadata_path, sub_path, save_path)

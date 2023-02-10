@@ -5,9 +5,9 @@ paths: {
     metadata_dest: "/home/isaiah/kaggle/mammo/preprocessed/metadata.json",
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_split.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/sub_timesheet.json",
-    model_load_src: "/home/isaiah/kaggle/mammo/results/20230208/densenet_final_03.pth",
-    submission_path: "/home/isaiah/kaggle/mammo/results/20230209/submission3.csv",
-    other_result_dest: "/home/isaiah/kaggle/mammo/results/20230209/other_res3.csv"
+    model_load_src: "/home/isaiah/kaggle/mammo/results/20230209/densenet_ckpt_01.pth",
+    submission_path: "/home/isaiah/kaggle/mammo/results/20230209/submission_ckpt_model.csv",
+    other_result_dest: "/home/isaiah/kaggle/mammo/results/20230209/other_res_ckpt_model.csv"
 }
 
 preprocess_params: {
@@ -34,7 +34,7 @@ dataset_params: {
 
 model_params: {
     growth_rate: 32,
-    block_config: [6, 12, 64, 48],
+    block_config: [6, 12, 48, 32],
     num_init_features: 64,
     bn_size: 4,
     drop_rate: 0,

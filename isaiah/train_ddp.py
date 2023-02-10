@@ -68,6 +68,8 @@ class Train:
         with open(self.data_ids_path, "r") as f:
             self.data_ids = Dict(json.load(f))
 
+        self.e = 1e-6
+
     def _CheckMakeDirs(self, filepath):
         if not isdir(dirname(filepath)): os.makedirs(dirname(filepath))
 
@@ -155,13 +157,17 @@ class Train:
 
             # Validation loop;  every epoch
             self.model.eval()
-            preds = []
+            probs = []
             labels = []
             for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
-                preds.extend(torch.sigmoid(self.model(vi)).detach().to("cpu").numpy().flatten().tolist())
+                probs.extend(torch.sigmoid(self.model(vi)).detach().to("cpu").numpy().flatten().tolist())
                 labels.extend(vt.detach().to("cpu").numpy().flatten().tolist())
-            eacc = np.sum(np.array(preds).round() == np.array(labels))/float(len(preds))
-            sco = float(PFbeta(labels, preds, beta=0.5))
+            preds = np.array(probs).round()
+            truths = np.array(labels)
+            cmat = self._ConfusionMatrix(self, preds, truths)
+            # output cmat to report
+            eacc = np.sum(np.array(probs).round() == np.array(labels))/float(len(probs))
+            sco = float(PFbeta(labels, probs, beta=0.5))
             # self.train_report.score.append(sco)
             if gpu_id == 0:
                 self._CheckMakeDirs(self.ckpts_path)
@@ -183,6 +189,13 @@ class Train:
             log.close()
         self._ShutdownDDP()
         return
+
+    def _ConfusionMatrix(self, p, gt):
+        tp = np.sum((p == 1) & (gt == 1))
+        fp = np.sum(p) - tp
+        tn = np.sum(gt) - tp
+        fn = np.sum((p == 0) & (gt == 1))
+        return tp, fp, tn ,fn
 
     def _SetupDDP(self, rank, world_size):
         """
