@@ -56,6 +56,7 @@ class Train:
         self.batch_size = self.train_cfgs.batch_size
         self.val_size = self.train_cfgs.validation_size
         self.track_freq = self.train_cfgs.tracking_frequency
+        self.block_size = self.track_freq * self.batch_size
         self.classes = self.train_cfgs.classes
 
         self.met_name = "PFbeta"
@@ -110,7 +111,7 @@ class Train:
         eacc = 0.
         best_score = 0.
         sco = 0.
-        block = 0
+        block = 1
         samples = []
         if gpu_id == 0:
             if os.path.exists(self.train_report_path):
@@ -137,11 +138,11 @@ class Train:
                     bacc = binary_accuracy(out, gt).detach().to("cpu").item()
                     loss.backward()
                     self.optimizer.step()
-                    if (gpu_id == 0) and batch % self.track_freq:
+                    if (gpu_id == 0) and ((batch + 1) % self.track_freq == 0):
                         self.scheduler.step()
-                        writer.writerow([epoch, block + 1, last_lr, samples, loss.detach().to("cpu").item(),
+                        writer.writerow([epoch, block, last_lr, samples, loss.detach().to("cpu").item(),
                                          tp, fp, tn, fn, bacc, eacc, sco, best_score])
-                        print((f"epoch {epoch}/{self.epochs} | batch: {batch}/{len(self.trainloader)} | "
+                        print((f"epoch {epoch}/{self.epochs} | block: {block}, block_size: {self.block_size} | "
                                f"loss: {loss.item():.5f}, block_acc: {bacc:.3f}, epoch_acc: {eacc:.3f}, "
                                f"{self.met_name}: {sco:.3f}, best: {best_score:.3f}"))
                         block += 1
@@ -177,10 +178,10 @@ class Train:
         return
 
     def _ConfusionMatrix(self, p, gt):
-        tp = np.sum((p == 1) & (gt == 1))
-        fp = np.sum(p) - tp
-        tn = np.sum(gt) - tp
-        fn = np.sum((p == 0) & (gt == 1))
+        tp = np.sum((p == 1) & (gt == 1)).astype(int)
+        fp = np.sum(p).astype(int) - tp
+        tn = np.sum(gt).astype(int) - tp
+        fn = np.sum((p == 0) & (gt == 1)).astype(int)
         return tp, fp, tn ,fn
 
     def _SetupDDP(self, rank, world_size):
