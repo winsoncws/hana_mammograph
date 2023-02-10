@@ -46,46 +46,41 @@ def MetricsFromCM(df: pd.DataFrame, epsilon=1.0e-6):
     tn = df["tn"].to_numpy()
     fn = df["fn"].to_numpy()
     tpr = (tp + epsilon)/(tp + fn + epsilon)
+    fpr = (fp + epsilon)/(tp + fn + epsilon)
     precision = (tp + epsilon)/(tp + fp + epsilon)
     tnr = (tn + epsilon)/(fp + tn + epsilon)
-    return tpr, precision, tnr
+    return tpr, fpr, precision, tnr
 
 def Dashboard(report: pd.DataFrame, window_size: int=100):
     loss_ma = MovingAvg(report.loss, window_size)
-    bacc_ma = MovingAvg(report.batch_accuracy, window_size)
+    bacc_ma = MovingAvg(report.block_accuracy, window_size)
     lr_ma = MovingAvg(report.learning_rate, window_size)
-    eacc = report.groupby("epoch").mean(numeric_only=True)[["batch_accuracy", "epoch_accuracy"]]
-    try:
-        ecm = report.groupby("epoch").mean(numeric_only=True)[["epoch_tp", "epoch_fp", "epoch_tn", "epoch_fn"]]
-        recall, precision, tnr = MetricsFromCM(ecm)
-        plotcm = True
-    except:
-        print("confusion matrix not present")
-        plotcm = False
-        pass
+    eacc = report.groupby("epoch").mean(numeric_only=True)[["block_accuracy", "epoch_accuracy"]]
+    ecm = report.groupby("epoch").mean(numeric_only=True)[["epoch_tp", "epoch_fp", "epoch_tn", "epoch_fn"]]
+    recall, fpr, precision, tnr = MetricsFromCM(ecm)
     f1_scores = report.groupby("epoch").mean(numeric_only=True)["f1_score"]
     fig, axs = plt.subplots(2, 3, figsize=(12,8))
     fig.suptitle("Training Log")
     # plot loss
     axs[0, 0].set_title("loss")
-    axs[0, 0].set_xlabel("batch")
+    axs[0, 0].set_xlabel("block")
     axs[0, 0].set_ylabel("loss")
     axs[0, 0].scatter(report.index, report.loss, s=0.3, c="red", label="value")
     axs[0, 0].plot(report.index, loss_ma, "-b", label="moving avg")
     axs[0, 0].legend()
-    # plot batch acc
-    axs[0, 1].set_title("batch accuracy")
-    axs[0, 1].set_xlabel("batch")
+    # plot block acc
+    axs[0, 1].set_title("block accuracy")
+    axs[0, 1].set_xlabel("block")
     axs[0, 1].set_ylabel("accuracy")
-    axs[0, 1].scatter(report.index, report.batch_accuracy, s=0.3, c="red")
+    axs[0, 1].scatter(report.index, report.block_accuracy, s=0.3, c="red")
     axs[0, 1].plot(report.index, bacc_ma, "-b")
-    # plot epoch acc vs mean batch_acc
+    # plot epoch acc vs mean block_acc
     axs[0, 2].set_title("epoch accuracy")
     axs[0, 2].set_xlabel("epoch")
     axs[0, 2].set_ylabel("accuracy")
     axs[0, 2].plot(eacc.index, eacc.epoch_accuracy, "-r",
                    linewidth=0.3, label="eval")
-    axs[0, 2].plot(eacc.index, eacc.batch_accuracy, "-g",
+    axs[0, 2].plot(eacc.index, eacc.block_accuracy, "-g",
                    linewidth=0.3, label="train")
     axs[0, 2].legend()
     # plot epoch PFbeta
@@ -94,21 +89,16 @@ def Dashboard(report: pd.DataFrame, window_size: int=100):
     axs[1, 0].set_ylabel("accuracy")
     axs[1, 0].plot(f1_scores.index, f1_scores, "-r",
                    linewidth=0.3)
-    if plotcm:
-        # plot Recall, Precision and TNR
-        axs[1, 1].set_title("Recall, Precision and TNR")
-        axs[1, 1].set_xlabel("epoch")
-        axs[1, 1].set_ylabel("metric")
-        axs[1, 1].plot(ecm.index, recall, "-r",
-                       linewidth=0.3, label="recall")
-        axs[1, 1].plot(ecm.index, precision, "-g",
-                       linewidth=0.3, label="precision")
-        axs[1, 1].plot(ecm.index, tnr, "-b",
-                       linewidth=0.3, label="true neg rate")
-        axs[1, 1].legend()
+    # plot Recall, Precision and TNR
+    axs[1, 1].set_title("AUC")
+    axs[1, 1].set_xlabel("False Positive Rate")
+    axs[1, 1].set_ylabel("True Negative Rate")
+    axs[1, 1].plot(fpr, tnr, "-r",
+                   linewidth=0.3)
+    axs[1, 1].plot([0., 1.], [0., 1.], "-k", linewidth=0.3)
     # plot learning rate
     axs[1, 2].set_title("Learning Rate")
-    axs[1, 2].set_xlabel("batch")
+    axs[1, 2].set_xlabel("block")
     axs[1, 2].set_ylabel("accuracy")
     axs[1, 2].scatter(report.index, report.learning_rate, s=0.3, c="red")
     axs[1, 2].plot(report.index, lr_ma, "-b")

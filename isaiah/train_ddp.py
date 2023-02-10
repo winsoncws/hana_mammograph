@@ -44,7 +44,6 @@ class Train:
 
         self.ckpts_path = abspath(self.paths.model_ckpts_dest)
         self.model_best_path = abspath(self.paths.model_best_dest)
-        self.model_final_path = abspath(self.paths.model_final_dest)
         self.train_report_path = abspath(self.paths.train_report_path)
         self.data_path = abspath(self.paths.data_dest)
         self.metadata_path = abspath(self.paths.metadata_dest)
@@ -56,6 +55,7 @@ class Train:
         self.epochs = self.train_cfgs.epochs
         self.batch_size = self.train_cfgs.batch_size
         self.val_size = self.train_cfgs.validation_size
+        self.track_freq = self.train_cfgs.tracking_frequency
         self.classes = self.train_cfgs.classes
 
         self.met_name = "PFbeta"
@@ -73,24 +73,15 @@ class Train:
     def _CheckMakeDirs(self, filepath):
         if not isdir(dirname(filepath)): os.makedirs(dirname(filepath))
 
-    def _SaveBestModel(self, value):
-        if self.model_state != None:
-            self._CheckMakeDirs(self.model_best_path)
-            state = {
-                "model": self.model_state,
-                "optimizer": self.optimizer_state
-            }
-            torch.save(state, self.model_best_path)
-            print(f"New best model with {self.met_name} = {value} saved to {self.model_best_path}.")
+    def _SaveBestModel(self, state, value):
+        self._CheckMakeDirs(self.model_best_path)
+        torch.save(state, self.model_best_path)
+        print(f"New best model with {self.met_name} = {value} saved to {self.model_best_path}.")
 
-    def _SaveFinalModel(self, value):
-        self._CheckMakeDirs(self.model_final_path)
-        state = {
-            "model": self.model_state,
-            "optimizer": self.optimizer_state
-        }
-        torch.save(state, self.model_final_path)
-        print(f"Final model with {self.met_name} = {value} saved to {self.model_final_path}.")
+    def _SaveCkptsModel(self, state, value):
+        self._CheckMakeDirs(self.ckpts_path)
+        torch.save(state, self.ckpts_path)
+        print(f"Checkpoint with {self.met_name} = {value} saved to {self.ckpts_path}.")
 
     def _TrainDenseNetDDP(self, gpu_id):
         self._SetupDDP(gpu_id, self.no_gpus)
@@ -114,28 +105,30 @@ class Train:
         self.scheduler = CyclicLR(self.optimizer, **self.scheduler_cfgs)
         # a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
                                                # dtype=np.float32)).to(self.device)
+        tp, fp, tn, fn = 0, 0, 0, 0
         bacc = 0.
         eacc = 0.
         best_score = 0.
         sco = 0.
+        block = 0
+        samples = []
         if gpu_id == 0:
             if os.path.exists(self.train_report_path):
                 os.remove(self.train_report_path)
             log = open(self.train_report_path, "a")
             writer = csv.writer(log)
-            writer.writerow(["epoch", "batch", "learning_rate", "samples", "loss", "batch_accuracy",
+            writer.writerow(["epoch", "block", "learning_rate", "samples", "loss",
+                             "tp", "fp", "tn", "fn", "block_accuracy",
                              "epoch_accuracy", "f1_score", "best_score"])
         for epoch in range(1, self.epochs + 1):
             if self.train:
-                # if gpu_id == 0:
-                    # self.train_report.epoch.append(epoch)
 
                 # Training loop
                 self.model.train()
                 for batch, (img_id, inp, gt) in enumerate(self.trainloader):
                     last_lr = self.scheduler.get_last_lr()[0]
                     self.optimizer.zero_grad()
-                    samples = list(img_id)
+                    samples += list(img_id)
                     out = self.model(inp)
                     # c1 = F.binary_cross_entropy_with_logits(out[:, :4], gt[:, :4], reduction="none")
                     # c2 = F.l1_loss(out[:, 4:], gt[:, 4:], reduction="none")
@@ -144,16 +137,15 @@ class Train:
                     bacc = binary_accuracy(out, gt).detach().to("cpu").item()
                     loss.backward()
                     self.optimizer.step()
-                    # self.train_report.batch.append(batch + 1)
-                    # self.train_report.samples.append(samples)
-                    # self.train_report.loss.append(loss.detach().to("cpu").tolist())
-                    if gpu_id == 0:
+                    if (gpu_id == 0) and batch % self.track_freq:
                         self.scheduler.step()
-                        writer.writerow([epoch, batch + 1, last_lr, samples, loss.detach().to("cpu").item(),
-                                         bacc, eacc, sco, best_score])
-                        print((f"epoch {epoch}/{self.epochs} | batch_size: {self.batch_size} | "
-                               f"loss: {loss.item():.5f}, batch_acc: {bacc:.3f}, epoch_acc: {eacc:.3f}, "
+                        writer.writerow([epoch, block + 1, last_lr, samples, loss.detach().to("cpu").item(),
+                                         tp, fp, tn, fn, bacc, eacc, sco, best_score])
+                        print((f"epoch {epoch}/{self.epochs} | batch: {batch}/{len(self.trainloader)} | "
+                               f"loss: {loss.item():.5f}, block_acc: {bacc:.3f}, epoch_acc: {eacc:.3f}, "
                                f"{self.met_name}: {sco:.3f}, best: {best_score:.3f}"))
+                        block += 1
+                        samples = []
 
             # Validation loop;  every epoch
             self.model.eval()
@@ -164,28 +156,22 @@ class Train:
                 labels.extend(vt.detach().to("cpu").numpy().flatten().tolist())
             preds = np.array(probs).round()
             truths = np.array(labels)
-            cmat = self._ConfusionMatrix(self, preds, truths)
             # output cmat to report
-            eacc = np.sum(np.array(probs).round() == np.array(labels))/float(len(probs))
+            eacc = np.sum(preds == truths)/float(len(probs))
             sco = float(PFbeta(labels, probs, beta=0.5))
             # self.train_report.score.append(sco)
             if gpu_id == 0:
-                self._CheckMakeDirs(self.ckpts_path)
                 state = {
                     "model": self.model.module.state_dict(),
                     "optimizer": self.optimizer.state_dict()
                 }
-                torch.save(state, self.ckpts_path)
-            if sco > best_score:
-                best_score = sco
-                self.model_state = self.model.module.state_dict()
-                self.optimizer_state = self.optimizer.state_dict()
-                if gpu_id == 0:
-                    self._SaveBestModel(best_score)
-        self.model_state = self.model.module.state_dict()
-        self.optimizer_state = self.optimizer.state_dict()
+                tp, fp, tn, fn = self._ConfusionMatrix(preds, truths)
+                self._SaveCkptsModel(state, sco)
+                if sco > best_score:
+                    best_score = sco
+                    if gpu_id == 0:
+                        self._SaveBestModel(state, best_score)
         if gpu_id == 0:
-            self._SaveFinalModel(sco)
             log.close()
         self._ShutdownDDP()
         return
