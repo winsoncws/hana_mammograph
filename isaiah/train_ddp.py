@@ -14,7 +14,7 @@ from torch.optim.lr_scheduler import CyclicLR
 from torch.distributed import init_process_group, destroy_process_group
 import torch.multiprocessing as mp
 from torchmetrics.functional.classification import binary_accuracy
-from dataset import MammoH5Data, GroupSampler, DoubleBalancedGroupDistSampler
+from dataset import MammoH5Data, GroupDistSampler, DoubleBalancedGroupDistSampler
 from models import DenseNet
 from metrics import PFbeta
 from utils import printProgressBarRatio

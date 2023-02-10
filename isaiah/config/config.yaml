@@ -5,11 +5,11 @@ paths: {
     metadata_dest: "/home/isaiah/kaggle/mammo/preprocessed/metadata.json",
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_split.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
-    model_load_src: "/home/isaiah/kaggle/mammo/results/20230208/densenet_best_02.pth",
-    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_ckpt_03.pth",
-    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_best_03.pth",
-    model_final_dest: "/home/isaiah/kaggle/mammo/results/20230208/densenet_final_03.pth",
-    train_report_path: "/home/isaiah/kaggle/mammo/results/20230208/densenet_rep_03.csv"
+    model_load_src: null,
+    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230209/densenet_ckpt_01.pth",
+    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230209/densenet_best_01.pth",
+    model_final_dest: "/home/isaiah/kaggle/mammo/results/20230209/densenet_final_01.pth",
+    train_report_path: "/home/isaiah/kaggle/mammo/results/20230209/densenet_rep_01.csv"
 }
 
 preprocess_params: {
@@ -47,13 +47,13 @@ optimizer_params: {
 scheduler_params: {
     base_lr: 1.0e-5,
     max_lr: 6.0e-5,
-    step_size_up: 500,
+    step_size_up: 1000,
     cycle_momentum: False
 }
 
 model_params: {
     growth_rate: 32,
-    block_config: [6, 12, 64, 48],
+    block_config: [6, 12, 48, 32],
     num_init_features: 64,
     bn_size: 4,
     drop_rate: 0,
@@ -64,9 +64,9 @@ model_params: {
 run_params: {
     train: True,
     disable_cuda: False,
-    epochs: 40,
-    batch_size: 20,
-    validation_size: 10,
+    epochs: 50,
+    batch_size: 30,
+    validation_size: 15,
     loss_weights: [1.],
     classes: ['cancer', 'healthy']
 }
