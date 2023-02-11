@@ -180,8 +180,8 @@ class Train:
     def _ConfusionMatrix(self, p, gt):
         tp = np.sum((p == 1) & (gt == 1)).astype(int)
         fp = np.sum(p).astype(int) - tp
-        tn = np.sum(gt).astype(int) - tp
-        fn = np.sum((p == 0) & (gt == 1)).astype(int)
+        tn = np.sum((p == 0) & (gt == 0)).astype(int)
+        fn = np.sum(gt).astype(int) - tp
         return tp, fp, tn ,fn
 
     def _SetupDDP(self, rank, world_size):
