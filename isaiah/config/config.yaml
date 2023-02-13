@@ -6,9 +6,10 @@ paths: {
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_split.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
     model_load_src: null,
-    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230210/densenet_ckpt_01.pth",
-    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230210/densenet_best_01.pth",
-    train_report_path: "/home/isaiah/kaggle/mammo/results/20230210/densenet_rep_01.csv"
+    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230213/densenet_ckpt_01.pth",
+    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230213/densenet_best_01.pth",
+    train_report_path: "/home/isaiah/kaggle/mammo/results/20230213/densenet_train_rep_01.csv",
+    eval_report_path: "/home/isaiah/kaggle/mammo/results/20230213/densenet_eval_rep_01.csv"
 }
 
 preprocess_params: {
@@ -34,7 +35,7 @@ metadata_params: {
 }
 
 dataset_params: {
-    augmentations: {"contrast_brightness"},
+    augmentations: ["contrast_brightness", "spatial", "noise"],
     labels: ["cancer"],
     sample_ratio: 0.5
 }
