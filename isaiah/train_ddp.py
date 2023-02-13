@@ -13,7 +13,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
 from torch.distributed import init_process_group, destroy_process_group
 import torch.multiprocessing as mp
-from torchmetrics.functional.classification import binary_accuracy
+from torchmetrics.functional.classification import binary_f1_score
 from dataset import MammoH5Data, GroupDistSampler, DoubleBalancedGroupDistSampler
 from models import DenseNet
 from metrics import PFbeta
@@ -119,8 +119,7 @@ class Train:
             log = open(self.train_report_path, "a")
             writer = csv.writer(log)
             writer.writerow(["epoch", "block", "learning_rate", "samples", "loss",
-                             "tp", "fp", "tn", "fn", "block_accuracy",
-                             "epoch_accuracy", "f1_score", "best_score"])
+                             "tp", "fp", "tn", "fn", "block_f1_score", "PFbeta", "best_score"])
         for epoch in range(1, self.epochs + 1):
             if self.train:
 
@@ -134,16 +133,17 @@ class Train:
                     # c1 = F.binary_cross_entropy_with_logits(out[:, :4], gt[:, :4], reduction="none")
                     # c2 = F.l1_loss(out[:, 4:], gt[:, 4:], reduction="none")
                     # loss = torch.sum(a[:, :4]*c1) + torch.sum(a[:, 4:]*c2)
-                    loss = F.binary_cross_entropy_with_logits(out, gt)
-                    bacc = binary_accuracy(out, gt).detach().to("cpu").item()
+                    p = torch.sigmoid(out)
+                    loss = F.binary_cross_entropy(p, gt)
+                    bf1 = binary_f1_score(p, gt).detach().to("cpu").item()
                     loss.backward()
                     self.optimizer.step()
                     if (gpu_id == 0) and ((batch + 1) % self.track_freq == 0):
                         self.scheduler.step()
                         writer.writerow([epoch, block, last_lr, samples, loss.detach().to("cpu").item(),
-                                         tp, fp, tn, fn, bacc, eacc, sco, best_score])
+                                         tp, fp, tn, fn, bf1, sco, best_score])
                         print((f"epoch {epoch}/{self.epochs} | block: {block}, block_size: {self.block_size} | "
-                               f"loss: {loss.item():.5f}, block_acc: {bacc:.3f}, epoch_acc: {eacc:.3f}, "
+                               f"loss: {loss.item():.5f}, block_f1: {bf1:.3f}, "
                                f"{self.met_name}: {sco:.3f}, best: {best_score:.3f}"))
                         block += 1
                         samples = []
@@ -157,10 +157,7 @@ class Train:
                 labels.extend(vt.detach().to("cpu").numpy().flatten().tolist())
             preds = np.array(probs).round()
             truths = np.array(labels)
-            # output cmat to report
-            eacc = np.sum(preds == truths)/float(len(probs))
-            sco = float(PFbeta(labels, probs, beta=0.5))
-            # self.train_report.score.append(sco)
+            sco = float(binary_f1_score(probs, labels))
             if gpu_id == 0:
                 state = {
                     "model": self.model.module.state_dict(),
