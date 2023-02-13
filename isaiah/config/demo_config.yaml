@@ -6,9 +6,10 @@ paths: {
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/demo1000balsplit.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
     model_load_src: null,
-    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230210/demo_densenet_ckpt_01.pth",
-    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230210/demo_densenet_best_01.pth",
-    train_report_path: "/home/isaiah/kaggle/mammo/results/20230210/demo_densenet_rep_01.csv"
+    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230213/demo_densenet_ckpt_01.pth",
+    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230213/demo_densenet_best_01.pth",
+    train_report_path: "/home/isaiah/kaggle/mammo/results/20230213/demo_densenet_train_rep_01.csv",
+    eval_report_path: "/home/isaiah/kaggle/mammo/results/20230213/demo_densenet_eval_rep_01.csv"
 }
 
 preprocess_params: {
@@ -34,7 +35,7 @@ metadata_params: {
 }
 
 dataset_params: {
-    augmentations: {"contrast_brightness"},
+    augmentations: ["contrast_brightness"],
     labels: ["cancer"],
     sample_ratio: 0.5
 }
@@ -52,7 +53,7 @@ scheduler_params: {
 
 model_params: {
     growth_rate: 32,
-    block_config: [6, 12, 32, 32],
+    block_config: [4, 4, 4, 4],
     num_init_features: 64,
     bn_size: 4,
     drop_rate: 0,
