@@ -36,7 +36,10 @@ class MammoH5Data(Dataset):
         self.aug_map = defaultdict(self._AugInvalid,
             {
                 "contrast_brightness": tio.RescaleIntensity(out_min_max=(0, 1),
-                                                            percentiles=(0, 99.5))
+                                                            percentiles=(0, 99.5)),
+                "spatial": tio.OneOf({tio.RandomAffine(): 0.75,
+                                      tio.RandomFlip(): 0.25}),
+                "noise": tio.RandomNoise(),
             }
         )
         self.aug = cfgs.augmentations

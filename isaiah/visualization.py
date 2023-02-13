@@ -40,6 +40,15 @@ def ExploreLoss(reportpath, window_size):
     ma = MovingAvg(loss.loss, int(window_size))
     PlotLoss(loss, ma)
 
+def ConfusionMatrix(df, labels):
+    p = df[labels[0]]
+    gt = df[labels[1]]
+    tp = np.sum((p == 1) & (gt == 1)).astype(int)
+    fp = np.sum(p).astype(int) - tp
+    tn = np.sum((p == 0) & (gt == 0)).astype(int)
+    fn = np.sum(gt).astype(int) - tp
+    return tp, fp, tn ,fn
+
 def MetricsFromCM(df: pd.DataFrame, epsilon=1.0e-6):
     tp = df["tp"].to_numpy()
     fp = df["fp"].to_numpy()
@@ -55,9 +64,10 @@ def Dashboard(report: pd.DataFrame, window_size: int=100):
     loss_ma = MovingAvg(report.loss, window_size)
     bacc_ma = MovingAvg(report.block_accuracy, window_size)
     lr_ma = MovingAvg(report.learning_rate, window_size)
-    eacc = report.groupby("epoch").mean(numeric_only=True)[["block_accuracy", "epoch_accuracy"]]
-    ecm = report.groupby("epoch").mean(numeric_only=True)[["epoch_tp", "epoch_fp", "epoch_tn", "epoch_fn"]]
-    recall, fpr, precision, tnr = MetricsFromCM(ecm)
+    bcm = report.groupby("block").apply(ConfusionMatrix, labels=["predictions", "truths"])
+    print(bcm)
+    # check bcm works
+    recall, fpr, precision, tnr = MetricsFromCM(bcm)
     f1_scores = report.groupby("epoch").mean(numeric_only=True)["f1_score"]
     fig, axs = plt.subplots(2, 3, figsize=(12,8))
     fig.suptitle("Training Log")

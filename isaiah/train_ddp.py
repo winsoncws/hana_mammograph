@@ -16,7 +16,6 @@ import torch.multiprocessing as mp
 from torchmetrics.functional.classification import binary_f1_score
 from dataset import MammoH5Data, GroupDistSampler, DoubleBalancedGroupDistSampler
 from models import DenseNet
-from metrics import PFbeta
 from utils import printProgressBarRatio
 
 # ViT transfer learning model? Inception net model?
@@ -45,6 +44,7 @@ class Train:
         self.ckpts_path = abspath(self.paths.model_ckpts_dest)
         self.model_best_path = abspath(self.paths.model_best_dest)
         self.train_report_path = abspath(self.paths.train_report_path)
+        self.eval_report_path = abspath(self.paths.eval_report_path)
         self.data_path = abspath(self.paths.data_dest)
         self.metadata_path = abspath(self.paths.metadata_dest)
         self.data_ids_path = abspath(self.paths.data_ids_dest)
@@ -73,6 +73,12 @@ class Train:
 
     def _CheckMakeDirs(self, filepath):
         if not isdir(dirname(filepath)): os.makedirs(dirname(filepath))
+
+    def _RemovePath(self, filepath):
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
 
     def _SaveBestModel(self, state, value):
         self._CheckMakeDirs(self.model_best_path)
@@ -106,20 +112,22 @@ class Train:
         self.scheduler = CyclicLR(self.optimizer, **self.scheduler_cfgs)
         # a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
                                                # dtype=np.float32)).to(self.device)
-        tp, fp, tn, fn = 0, 0, 0, 0
-        bacc = 0.
-        eacc = 0.
         best_score = 0.
         sco = 0.
         block = 1
         samples = []
+        preds = []
+        truths = []
         if gpu_id == 0:
-            if os.path.exists(self.train_report_path):
-                os.remove(self.train_report_path)
-            log = open(self.train_report_path, "a")
-            writer = csv.writer(log)
-            writer.writerow(["epoch", "block", "learning_rate", "samples", "loss",
-                             "tp", "fp", "tn", "fn", "block_f1_score", "PFbeta", "best_score"])
+            self._RemovePath(self.train_report_path)
+            self._RemovePath(self.eval_report_path)
+            train_log = open(self.train_report_path, "a")
+            eval_log = open(self.eval_report_path, "a")
+            train_writer = csv.writer(train_log)
+            eval_writer = csv.writer(eval_log)
+            train_writer.writerow(["epoch", "block", "learning_rate", "samples",
+                             "predictions", "truths", "loss", "f1_score"])
+            eval_writer.writerow(["epoch", "predictions", "truths", "f1_score"])
         for epoch in range(1, self.epochs + 1):
             if self.train:
 
@@ -134,43 +142,51 @@ class Train:
                     # c2 = F.l1_loss(out[:, 4:], gt[:, 4:], reduction="none")
                     # loss = torch.sum(a[:, :4]*c1) + torch.sum(a[:, 4:]*c2)
                     p = torch.sigmoid(out)
+                    preds.append(p.detach())
+                    truths.append(gt.detach())
                     loss = F.binary_cross_entropy(p, gt)
-                    bf1 = binary_f1_score(p, gt).detach().to("cpu").item()
                     loss.backward()
                     self.optimizer.step()
                     if (gpu_id == 0) and ((batch + 1) % self.track_freq == 0):
                         self.scheduler.step()
-                        writer.writerow([epoch, block, last_lr, samples, loss.detach().to("cpu").item(),
-                                         tp, fp, tn, fn, bf1, sco, best_score])
+                        preds = torch.cat(preds)
+                        truths = torch.cat(truths)
+                        bf1 = binary_f1_score(preds, truths)
+                        train_writer.writerow([epoch, block, last_lr, samples, preds,
+                                         truths, loss.detach().to("cpu").item(),
+                                         bf1])
                         print((f"epoch {epoch}/{self.epochs} | block: {block}, block_size: {self.block_size} | "
                                f"loss: {loss.item():.5f}, block_f1: {bf1:.3f}, "
                                f"{self.met_name}: {sco:.3f}, best: {best_score:.3f}"))
                         block += 1
                         samples = []
+                        preds = []
+                        truths = []
 
             # Validation loop;  every epoch
             self.model.eval()
             probs = []
             labels = []
             for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
-                probs.extend(torch.sigmoid(self.model(vi)).detach().to("cpu").numpy().flatten().tolist())
-                labels.extend(vt.detach().to("cpu").numpy().flatten().tolist())
-            preds = np.array(probs).round()
-            truths = np.array(labels)
+                probs.append(torch.sigmoid(self.model(vi)).detach())
+                labels.append(vt.detach())
+            probs = torch.cat(probs)
+            labels = torch.cat(labels)
             sco = float(binary_f1_score(probs, labels))
             if gpu_id == 0:
+                eval_writer.writerow([epoch, probs, labels, sco])
                 state = {
                     "model": self.model.module.state_dict(),
                     "optimizer": self.optimizer.state_dict()
                 }
-                tp, fp, tn, fn = self._ConfusionMatrix(preds, truths)
                 self._SaveCkptsModel(state, sco)
                 if sco > best_score:
                     best_score = sco
                     if gpu_id == 0:
                         self._SaveBestModel(state, best_score)
         if gpu_id == 0:
-            log.close()
+            train_log.close()
+            eval_log.close()
         self._ShutdownDDP()
         return
 
