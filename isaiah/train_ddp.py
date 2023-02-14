@@ -149,12 +149,12 @@ class Train:
                     self.optimizer.step()
                     if (gpu_id == 0) and ((batch + 1) % self.track_freq == 0):
                         self.scheduler.step()
-                        preds = torch.cat(preds).numpy()
-                        truths = torch.cat(truths).numpy()
-                        bf1 = float(binary_f1_score(preds, truths))
-                        train_writer.writerow([epoch, block, last_lr, samples, preds,
-                                         truths, loss.detach().to("cpu").item(),
-                                         bf1])
+                        preds = torch.cat(preds)
+                        truths = torch.cat(truths)
+                        bf1 = binary_f1_score(preds, truths)
+                        train_writer.writerow([epoch, block, last_lr, samples, preds.cpu().tolist(),
+                                         truths.cpu().tolist(), loss.detach().to("cpu").item(),
+                                         bf1.item()])
                         print((f"epoch {epoch}/{self.epochs} | block: {block}, block_size: {self.block_size} | "
                                f"loss: {loss.item():.5f}, block_f1: {bf1:.3f}, "
                                f"{self.met_name}: {sco:.3f}, best: {best_score:.3f}"))
@@ -170,11 +170,11 @@ class Train:
             for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
                 probs.append(torch.sigmoid(self.model(vi)).detach())
                 labels.append(vt.detach())
-            probs = torch.cat(probs).numpy()
-            labels = torch.cat(labels).numpy()
-            sco = float(binary_f1_score(probs, labels))
+            probs = torch.cat(probs)
+            labels = torch.cat(labels)
+            sco = binary_f1_score(probs, labels)
             if gpu_id == 0:
-                eval_writer.writerow([epoch, probs, labels, sco])
+                eval_writer.writerow([epoch, probs.cpu().tolist(), labels.cpu().tolist(), sco.item()])
                 state = {
                     "model": self.model.module.state_dict(),
                     "optimizer": self.optimizer.state_dict()

@@ -6,10 +6,10 @@ paths: {
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/demo1000balsplit.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
     model_load_src: null,
-    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230213/demo_densenet_ckpt_01.pth",
-    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230213/demo_densenet_best_01.pth",
-    train_report_path: "/home/isaiah/kaggle/mammo/results/20230213/demo_densenet_train_rep_01.csv",
-    eval_report_path: "/home/isaiah/kaggle/mammo/results/20230213/demo_densenet_eval_rep_01.csv"
+    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_ckpt_01.pth",
+    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_best_01.pth",
+    train_report_path: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_train_rep_01.csv",
+    eval_report_path: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_eval_rep_01.csv"
 }
 
 preprocess_params: {
@@ -64,9 +64,9 @@ model_params: {
 run_params: {
     train: True,
     disable_cuda: False,
-    epochs: 3,
-    batch_size: 50,
-    validation_size: 20,
+    epochs: 20,
+    batch_size: 20,
+    validation_size: 40,
     tracking_frequency: 2,
     loss_weights: [1.],
     classes: ['cancer', 'healthy']
