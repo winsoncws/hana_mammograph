@@ -12,7 +12,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
-from torch.distributed import init_process_group, destroy_process_group
+from torch.distributed import init_process_group, destroy_process_group, all_gather, all_gather_object
 import torch.multiprocessing as mp
 from torchmetrics.functional.classification import binary_f1_score
 import timm
@@ -112,6 +112,7 @@ class Train:
         self.trainloader = DataLoader(self.data, self.batch_size, sampler=self.train_sampler)
         self.validloader = DataLoader(self.data, self.val_size, sampler=self.val_sampler)
         self.validballoader = DataLoader(self.data, self.val_size, sampler=self.val_bal_sampler)
+        self.total_val_size = self.val_sampler.total_size
         model = self.model_dict[self.selected_model](**self.model_cfgs).to(gpu_id)
         if self.model_state != None:
             model.load_state_dict(self.model_state)
@@ -138,7 +139,7 @@ class Train:
             eval_writer = csv.writer(eval_log)
             train_writer.writerow(["epoch", "block", "learning_rate", "samples",
                              "predictions", "truths", "loss", "f1_score"])
-            eval_writer.writerow(["epoch", "samples", "predictions", "truths",
+            eval_writer.writerow(["epoch", "predictions", "truths",
                                   "f1_score", "f1_score_bal"])
         for epoch in range(1, self.epochs + 1):
             if self.train:
@@ -185,18 +186,14 @@ class Train:
             probs = torch.cat(probs)
             labels = torch.cat(labels)
             bsco = binary_f1_score(probs, labels).item()
-            probs = []
-            labels = []
-            vsamples = []
+            probs = [torch.zeros(self.val_size, dtype=torch.float32) for _ in range(self.total_val_size)]
+            labels = [torch.zeros(self.val_size, dtype=torch.float32) for _ in range(self.total_val_size)]
             for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
-                probs.append(torch.sigmoid(self.model(vi)).detach())
-                labels.append(vt.detach())
-                vsamples += list(vimg_id)
-            probs = torch.cat(probs)
-            labels = torch.cat(labels)
+                all_gather(probs, torch.sigmoid(self.model(vi)))
+                all_gather(labels, vt)
             sco = binary_f1_score(probs, labels)
             if gpu_id == 0:
-                eval_writer.writerow([epoch, vsamples, probs.cpu().tolist(),
+                eval_writer.writerow([epoch, probs.cpu().tolist(),
                                       labels.cpu().tolist(), sco.item(),
                                       bsco])
                 state = {
