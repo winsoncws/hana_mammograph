@@ -149,9 +149,9 @@ class Train:
                     self.optimizer.step()
                     if (gpu_id == 0) and ((batch + 1) % self.track_freq == 0):
                         self.scheduler.step()
-                        preds = torch.cat(preds)
-                        truths = torch.cat(truths)
-                        bf1 = binary_f1_score(preds, truths)
+                        preds = torch.cat(preds).numpy()
+                        truths = torch.cat(truths).numpy()
+                        bf1 = float(binary_f1_score(preds, truths))
                         train_writer.writerow([epoch, block, last_lr, samples, preds,
                                          truths, loss.detach().to("cpu").item(),
                                          bf1])
@@ -170,8 +170,8 @@ class Train:
             for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
                 probs.append(torch.sigmoid(self.model(vi)).detach())
                 labels.append(vt.detach())
-            probs = torch.cat(probs)
-            labels = torch.cat(labels)
+            probs = torch.cat(probs).numpy()
+            labels = torch.cat(labels).numpy()
             sco = float(binary_f1_score(probs, labels))
             if gpu_id == 0:
                 eval_writer.writerow([epoch, probs, labels, sco])
