@@ -1,5 +1,6 @@
 import os, sys
 from os.path import isdir, abspath, dirname
+from collections import defaultdict
 import numpy as np
 import json
 import csv
@@ -14,6 +15,7 @@ from torch.optim.lr_scheduler import CyclicLR
 from torch.distributed import init_process_group, destroy_process_group
 import torch.multiprocessing as mp
 from torchmetrics.functional.classification import binary_f1_score
+import timm
 from dataset import MammoH5Data, GroupDistSampler, DoubleBalancedGroupDistSampler
 from models import DenseNet
 from utils import printProgressBarRatio
@@ -58,6 +60,11 @@ class Train:
         self.track_freq = self.train_cfgs.tracking_frequency
         self.block_size = self.track_freq * self.batch_size
         self.classes = self.train_cfgs.classes
+        self.selected_model = self.train_cfgs.model
+
+        self.model_dict = defaultdict(timm.create_model, {
+            "custom_densenet": DenseNet,
+        })
 
         self.met_name = "PFbeta"
         self.labels = self.data_cfgs.labels
@@ -90,7 +97,7 @@ class Train:
         torch.save(state, self.ckpts_path)
         print(f"Checkpoint with {self.met_name} = {value} saved to {self.ckpts_path}.")
 
-    def _TrainDenseNetDDP(self, gpu_id):
+    def _TrainModelDDP(self, gpu_id):
         self._SetupDDP(gpu_id, self.no_gpus)
         self.data = MammoH5Data(gpu_id, self.data_path, self.metadata_path,
                                 self.data_cfgs)
@@ -99,9 +106,13 @@ class Train:
                                                     shuffle=True)
         self.val_sampler = GroupDistSampler(self.data_ids.val[self.classes[0]] + self.data_ids.val[self.classes[1]],
                                                   shuffle=True)
+        self.val_bal_sampler = DoubleBalancedGroupDistSampler(self.data_ids.val[self.classes[0]],
+                                                    self.data_ids.val[self.classes[1]],
+                                                    shuffle=True)
         self.trainloader = DataLoader(self.data, self.batch_size, sampler=self.train_sampler)
         self.validloader = DataLoader(self.data, self.val_size, sampler=self.val_sampler)
-        model = DenseNet(**self.model_cfgs).to(gpu_id)
+        self.validballoader = DataLoader(self.data, self.val_size, sampler=self.val_bal_sampler)
+        model = self.model_dict[self.selected_model](**self.model_cfgs).to(gpu_id)
         if self.model_state != None:
             model.load_state_dict(self.model_state)
             print(f"gpu_id: {gpu_id} - model loaded.")
@@ -127,7 +138,8 @@ class Train:
             eval_writer = csv.writer(eval_log)
             train_writer.writerow(["epoch", "block", "learning_rate", "samples",
                              "predictions", "truths", "loss", "f1_score"])
-            eval_writer.writerow(["epoch", "predictions", "truths", "f1_score"])
+            eval_writer.writerow(["epoch", "samples", "predictions", "truths",
+                                  "f1_score", "f1_score_bal"])
         for epoch in range(1, self.epochs + 1):
             if self.train:
 
@@ -167,14 +179,26 @@ class Train:
             self.model.eval()
             probs = []
             labels = []
+            for vbbatch, (vbimg_id, vbi, vbt) in enumerate(self.validballoader):
+                probs.append(torch.sigmoid(self.model(vbi)).detach())
+                labels.append(vbt.detach())
+            probs = torch.cat(probs)
+            labels = torch.cat(labels)
+            bsco = binary_f1_score(probs, labels).item()
+            probs = []
+            labels = []
+            vsamples = []
             for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
                 probs.append(torch.sigmoid(self.model(vi)).detach())
                 labels.append(vt.detach())
+                vsamples += list(vimg_id)
             probs = torch.cat(probs)
             labels = torch.cat(labels)
             sco = binary_f1_score(probs, labels)
             if gpu_id == 0:
-                eval_writer.writerow([epoch, probs.cpu().tolist(), labels.cpu().tolist(), sco.item()])
+                eval_writer.writerow([epoch, vsamples, probs.cpu().tolist(),
+                                      labels.cpu().tolist(), sco.item(),
+                                      bsco])
                 state = {
                     "model": self.model.module.state_dict(),
                     "optimizer": self.optimizer.state_dict()
@@ -213,7 +237,7 @@ class Train:
         return
 
     def RunDDP(self):
-        mp.spawn(self._TrainDenseNetDDP, nprocs=self.no_gpus)
+        mp.spawn(self._TrainModelDDP, nprocs=self.no_gpus)
 
 if __name__ == "__main__":
     pass

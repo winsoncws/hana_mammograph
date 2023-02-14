@@ -137,7 +137,7 @@ class _Transition(nn.Sequential):
         self.norm = nn.BatchNorm2d(num_input_features)
         self.relu = nn.ReLU(inplace=True)
         self.conv = nn.Conv2d(num_input_features, num_output_features, kernel_size=1, stride=1, bias=False)
-        self.pool = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2) # Changed from AvgPool2d to MaxPool2d
 
 
 class DenseNet(nn.Module):

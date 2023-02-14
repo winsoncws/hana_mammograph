@@ -47,14 +47,14 @@ optimizer_params: {
 scheduler_params: {
     base_lr: 1.0e-5,
     max_lr: 6.0e-5,
-    step_size_up: 1000,
+    step_size_up: 100,
     cycle_momentum: False
 }
 
 model_params: {
-    growth_rate: 32,
-    block_config: [6, 12, 24, 16],
-    num_init_features: 64,
+    growth_rate: 4,
+    block_config: [1, 1, 1, 1],
+    num_init_features: 16,
     bn_size: 4,
     drop_rate: 0,
     num_classes: 1,
@@ -62,12 +62,13 @@ model_params: {
 }
 
 run_params: {
+    model: "custom_densenet"
     train: True,
     disable_cuda: False,
-    epochs: 10,
-    batch_size: 30,
-    validation_size: 15,
-    tracking_frequency: 2,
+    epochs: 40,
+    batch_size: 100,
+    validation_size: 50,
+    tracking_frequency: 1,
     loss_weights: [1.],
     classes: ['cancer', 'healthy']
 }
