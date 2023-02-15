@@ -58,9 +58,10 @@ class MammoH5Data(Dataset):
             ds.read_direct(ds_arr)
         md = self.metadata.loc[key, self.labels].to_numpy(np.float32)
         ds_aug = self.Augment(np.expand_dims(ds_arr, axis=(0, 3))).squeeze(-1)
+        keyT = torch.tensor(int(key), dtype=torch.int64).to(self.device)
         mdT = torch.from_numpy(md).to(self.device)
         dsT = torch.from_numpy(ds_aug).to(self.device)
-        return key, dsT, mdT
+        return keyT, dsT, mdT
 
     def _ReadCSV(self):
         self.metadata = pd.read_csv(self.metadata_path)

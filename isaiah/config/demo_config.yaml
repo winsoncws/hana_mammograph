@@ -6,10 +6,10 @@ paths: {
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/demo1000balsplit.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
     model_load_src: null,
-    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_ckpt_01.pth",
-    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_best_01.pth",
-    train_report_path: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_train_rep_01.csv",
-    eval_report_path: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_eval_rep_01.csv"
+    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_ckpt_02.pth",
+    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_best_02.pth",
+    train_report_path: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_train_rep_02.csv",
+    eval_report_path: "/home/isaiah/kaggle/mammo/results/20230214/demo_densenet_eval_rep_02.csv"
 }
 
 preprocess_params: {
@@ -47,14 +47,14 @@ optimizer_params: {
 scheduler_params: {
     base_lr: 1.0e-5,
     max_lr: 6.0e-5,
-    step_size_up: 1000,
+    step_size_up: 100,
     cycle_momentum: False
 }
 
 model_params: {
-    growth_rate: 32,
-    block_config: [4, 4, 4, 4],
-    num_init_features: 64,
+    growth_rate: 4,
+    block_config: [1, 1, 1, 1],
+    num_init_features: 16,
     bn_size: 4,
     drop_rate: 0,
     num_classes: 1,
@@ -62,6 +62,7 @@ model_params: {
 }
 
 run_params: {
+    model: "custom_densenet",
     train: True,
     disable_cuda: False,
     epochs: 20,

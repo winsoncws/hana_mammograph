@@ -8,11 +8,12 @@ from addict import Dict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
-from torch.distributed import init_process_group, destroy_process_group, all_gather, all_gather_object
+from torch.distributed import init_process_group, destroy_process_group
 import torch.multiprocessing as mp
 from torchmetrics.functional.classification import binary_f1_score
 import timm
@@ -106,13 +107,9 @@ class Train:
                                                     shuffle=True)
         self.val_sampler = GroupDistSampler(self.data_ids.val[self.classes[0]] + self.data_ids.val[self.classes[1]],
                                                   shuffle=True)
-        self.val_bal_sampler = DoubleBalancedGroupDistSampler(self.data_ids.val[self.classes[0]],
-                                                    self.data_ids.val[self.classes[1]],
-                                                    shuffle=True)
         self.trainloader = DataLoader(self.data, self.batch_size, sampler=self.train_sampler)
         self.validloader = DataLoader(self.data, self.val_size, sampler=self.val_sampler)
-        self.validballoader = DataLoader(self.data, self.val_size, sampler=self.val_bal_sampler)
-        self.total_val_size = self.val_sampler.total_size
+        self.total_val_size = self.val_sampler.num_samples
         model = self.model_dict[self.selected_model](**self.model_cfgs).to(gpu_id)
         if self.model_state != None:
             model.load_state_dict(self.model_state)
@@ -127,7 +124,6 @@ class Train:
         best_score = 0.
         sco = 0.
         block = 1
-        samples = []
         preds = []
         truths = []
         if gpu_id == 0:
@@ -137,11 +133,13 @@ class Train:
             eval_log = open(self.eval_report_path, "a")
             train_writer = csv.writer(train_log)
             eval_writer = csv.writer(eval_log)
-            train_writer.writerow(["epoch", "block", "learning_rate", "samples",
+            train_writer.writerow(["epoch", "block", "learning_rate",
                              "predictions", "truths", "loss", "f1_score"])
-            eval_writer.writerow(["epoch", "predictions", "truths",
-                                  "f1_score", "f1_score_bal"])
+            eval_writer.writerow(["epoch", "samples", "predictions", "truths",
+                                  "f1_score"])
         for epoch in range(1, self.epochs + 1):
+            self.train_sampler.set_epoch(epoch)
+            self.val_sampler.set_epoch(epoch)
             if self.train:
 
                 # Training loop
@@ -149,7 +147,6 @@ class Train:
                 for batch, (img_id, inp, gt) in enumerate(self.trainloader):
                     last_lr = self.scheduler.get_last_lr()[0]
                     self.optimizer.zero_grad()
-                    samples += list(img_id)
                     out = self.model(inp)
                     # c1 = F.binary_cross_entropy_with_logits(out[:, :4], gt[:, :4], reduction="none")
                     # c2 = F.l1_loss(out[:, 4:], gt[:, 4:], reduction="none")
@@ -162,40 +159,47 @@ class Train:
                     self.optimizer.step()
                     if (gpu_id == 0) and ((batch + 1) % self.track_freq == 0):
                         self.scheduler.step()
-                        preds = torch.cat(preds)
-                        truths = torch.cat(truths)
+                        preds = torch.cat(preds).squeeze()
+                        truths = torch.cat(truths).squeeze()
                         bf1 = binary_f1_score(preds, truths)
-                        train_writer.writerow([epoch, block, last_lr, samples, preds.cpu().tolist(),
+                        train_writer.writerow([epoch, block, last_lr, preds.cpu().tolist(),
                                          truths.cpu().tolist(), loss.detach().to("cpu").item(),
                                          bf1.item()])
                         print((f"epoch {epoch}/{self.epochs} | block: {block}, block_size: {self.block_size} | "
                                f"loss: {loss.item():.5f}, block_f1: {bf1:.3f}, "
                                f"{self.met_name}: {sco:.3f}, best: {best_score:.3f}"))
                         block += 1
-                        samples = []
                         preds = []
                         truths = []
 
             # Validation loop;  every epoch
             self.model.eval()
+            samples = []
             probs = []
             labels = []
-            for vbbatch, (vbimg_id, vbi, vbt) in enumerate(self.validballoader):
-                probs.append(torch.sigmoid(self.model(vbi)).detach())
-                labels.append(vbt.detach())
+            for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
+                samples.append(vimg_id)
+                probs.append(torch.sigmoid(self.model(vi)))
+                labels.append(vt)
+            samples = torch.cat(samples)
             probs = torch.cat(probs)
             labels = torch.cat(labels)
-            bsco = binary_f1_score(probs, labels).item()
-            probs = [torch.zeros(self.val_size, dtype=torch.float32) for _ in range(self.total_val_size)]
-            labels = [torch.zeros(self.val_size, dtype=torch.float32) for _ in range(self.total_val_size)]
-            for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
-                all_gather(probs, torch.sigmoid(self.model(vi)))
-                all_gather(labels, vt)
-            sco = binary_f1_score(probs, labels)
+            sam_gather = [torch.zeros((self.total_val_size, 1),
+                                       dtype=torch.int64).to(probs.device) for _ in range(self.no_gpus)]
+            probs_gather = [torch.zeros((self.total_val_size, 1),
+                                        dtype=torch.float32).to(probs.device) for _ in range(self.no_gpus)]
+            labels_gather = [torch.zeros((self.total_val_size, 1),
+                                         dtype=torch.float32).to(probs.device) for _ in range(self.no_gpus)]
+            dist.all_gather(sam_gather, samples)
+            dist.all_gather(probs_gather, probs)
+            dist.all_gather(labels_gather, labels)
+            all_samples = torch.cat(sam_gather).squeeze()
+            all_probs = torch.cat(probs_gather).squeeze()
+            all_labels = torch.cat(labels_gather).squeeze()
             if gpu_id == 0:
-                eval_writer.writerow([epoch, probs.cpu().tolist(),
-                                      labels.cpu().tolist(), sco.item(),
-                                      bsco])
+                sco = binary_f1_score(all_probs, all_labels)
+                eval_writer.writerow([epoch, all_samples.cpu().tolist(), all_probs.cpu().tolist(),
+                                      all_labels.cpu().tolist(), sco.item()])
                 state = {
                     "model": self.model.module.state_dict(),
                     "optimizer": self.optimizer.state_dict()
@@ -203,8 +207,7 @@ class Train:
                 self._SaveCkptsModel(state, sco)
                 if sco > best_score:
                     best_score = sco
-                    if gpu_id == 0:
-                        self._SaveBestModel(state, best_score)
+                    self._SaveBestModel(state, best_score)
         if gpu_id == 0:
             train_log.close()
             eval_log.close()
