@@ -178,7 +178,6 @@ class Train:
             probs = []
             labels = []
             for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
-                print(vbatch)
                 samples.append(vimg_id.detach())
                 probs.append(torch.sigmoid(self.model(vi)).detach())
                 labels.append(vt.detach())
