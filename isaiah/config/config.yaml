@@ -63,11 +63,11 @@ model_params: {
 
 run_params: {
     model: "custom_densenet",
-    train: False,
+    train: True,
     disable_cuda: False,
-    epochs: 1,
-    batch_size: 30,
-    validation_size: 15,
+    epochs: 40,
+    batch_size: 100,
+    validation_size: 50,
     tracking_frequency: 1,
     loss_weights: [1.],
     classes: ['cancer', 'healthy']
