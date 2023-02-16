@@ -20,6 +20,7 @@ import timm
 from dataset import MammoH5Data, GroupDistSampler, DoubleBalancedGroupDistSampler
 from models import DenseNet
 from utils import printProgressBarRatio
+import time
 
 # ViT transfer learning model? Inception net model?
 
@@ -174,53 +175,63 @@ class Train:
 
             # Validation loop;  every epoch
             self.model.eval()
-            samples = [torch.ones(1, 1)]
-            probs = [torch.ones(1, 1)]
-            labels = [torch.ones(1, 1)]
+            samples = []
+            probs = []
+            labels = []
+            rank = dist.get_rank()
+            start = time.time()
             for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
-                # samples.append(vimg_id)
-                # probs.append(torch.sigmoid(self.model(vi)))
-                # labels.append(vt)
-                pass
-            samples = torch.cat(samples)
-            probs = torch.cat(probs)
-            labels = torch.cat(labels)
+                samples.append(vimg_id.detach().cpu())
+                probs.append(torch.sigmoid(self.model(vi)).detach().cpu())
+                labels.append(vt.detach().cpu())
+            samples = torch.cat(samples).cuda(rank)
+            probs = torch.cat(probs).cuda(rank)
+            labels = torch.cat(labels).cuda(rank)
+            print(f"samples: {samples.device}")
+            print(f"probs: {probs.device}")
+            print(f"labels: {labels.device}")
             sam_gather = [torch.zeros((self.total_val_size, 1),
                                        dtype=torch.int64).to(probs.device) for _ in range(self.no_gpus)]
             probs_gather = [torch.zeros((self.total_val_size, 1),
                                         dtype=torch.float32).to(probs.device) for _ in range(self.no_gpus)]
             labels_gather = [torch.zeros((self.total_val_size, 1),
                                          dtype=torch.float32).to(probs.device) for _ in range(self.no_gpus)]
+            print(f"sam_gather: {sam_gather[0].device}")
+            print(f"probs_gather: {probs_gather[0].device}")
+            print(f"labels_gather: {labels_gather[0].device}")
             dist.all_gather(sam_gather, samples)
             dist.all_gather(probs_gather, probs)
             dist.all_gather(labels_gather, labels)
-            del samples
-            del probs
-            del labels
+            end = time.time()
+            print(f"Time Taken = {end - start}")
+            print(torch.cat(sam_gather).shape)
+            # del samples
+            # del probs
+            # del labels
             all_samples = torch.cat(sam_gather).squeeze()
             all_probs = torch.cat(probs_gather).squeeze()
             all_labels = torch.cat(labels_gather).squeeze()
-            del sam_gather
-            del probs_gather
-            del labels_gather
-            if gpu_id == 0:
-                sco = binary_f1_score(all_probs, all_labels)
-                eval_writer.writerow([epoch, all_samples.cpu().tolist(), all_probs.cpu().tolist(),
-                                      all_labels.cpu().tolist(), sco.item()])
-                del all_samples
-                del all_probs
-                del all_labels
-                state = {
-                    "model": self.model.module.state_dict(),
-                    "optimizer": self.optimizer.state_dict()
-                }
-                self._SaveCkptsModel(state, sco)
-                if sco > best_score:
-                    best_score = sco
-                    self._SaveBestModel(state, best_score)
-        if gpu_id == 0:
-            train_log.close()
-            eval_log.close()
+            # del sam_gather
+            # del probs_gather
+            # del labels_gather
+            # if gpu_id == 0:
+                # sco = binary_f1_score(all_probs, all_labels)
+                # eval_writer.writerow([epoch, all_samples.cpu().tolist(), all_probs.cpu().tolist(),
+                                      # all_labels.cpu().tolist(), sco.item()])
+                # del all_samples
+                # del all_probs
+                # del all_labels
+                # state = {
+                    # "model": self.model.module.state_dict(),
+                    # "optimizer": self.optimizer.state_dict()
+                # }
+                # self._SaveCkptsModel(state, sco)
+                # if sco > best_score:
+                    # best_score = sco
+                    # self._SaveBestModel(state, best_score)
+        # if gpu_id == 0:
+            # train_log.close()
+            # eval_log.close()
         self._ShutdownDDP()
         return
 
