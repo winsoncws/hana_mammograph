@@ -174,13 +174,14 @@ class Train:
 
             # Validation loop;  every epoch
             self.model.eval()
-            samples = []
-            probs = []
-            labels = []
+            samples = [torch.ones(1, 1)]
+            probs = [torch.ones(1, 1)]
+            labels = [torch.ones(1, 1)]
             for vbatch, (vimg_id, vi, vt) in enumerate(self.validloader):
-                samples.append(vimg_id)
-                probs.append(torch.sigmoid(self.model(vi)))
-                labels.append(vt)
+                # samples.append(vimg_id)
+                # probs.append(torch.sigmoid(self.model(vi)))
+                # labels.append(vt)
+                pass
             samples = torch.cat(samples)
             probs = torch.cat(probs)
             labels = torch.cat(labels)
@@ -193,13 +194,22 @@ class Train:
             dist.all_gather(sam_gather, samples)
             dist.all_gather(probs_gather, probs)
             dist.all_gather(labels_gather, labels)
+            del samples
+            del probs
+            del labels
             all_samples = torch.cat(sam_gather).squeeze()
             all_probs = torch.cat(probs_gather).squeeze()
             all_labels = torch.cat(labels_gather).squeeze()
+            del sam_gather
+            del probs_gather
+            del labels_gather
             if gpu_id == 0:
                 sco = binary_f1_score(all_probs, all_labels)
                 eval_writer.writerow([epoch, all_samples.cpu().tolist(), all_probs.cpu().tolist(),
                                       all_labels.cpu().tolist(), sco.item()])
+                del all_samples
+                del all_probs
+                del all_labels
                 state = {
                     "model": self.model.module.state_dict(),
                     "optimizer": self.optimizer.state_dict()
