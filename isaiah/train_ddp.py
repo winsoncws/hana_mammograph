@@ -30,7 +30,7 @@ class NullScheduler:
         self.lr = lr
 
     def get_last_lr(self):
-        return self.lr
+        return [self.lr]
 
 class Train:
 
@@ -141,9 +141,9 @@ class Train:
         if self.train_cfgs.apply_lars:
             self.optimizer = LARS(self.optimizer)
         if self.sel_scheduler == None:
-            self.scheduler = self._null_scheduler()
+            self.scheduler = NullScheduler()
         else:
-            self.scheduler = self.scheduler_dict[self.sel_scheduler)](self.optimizer,
+            self.scheduler = self.scheduler_dict[self.sel_scheduler](self.optimizer,
                                                                       **self.scheduler_cfgs)
         # a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
                                                # dtype=np.float32)).to(self.device)
