@@ -41,11 +41,11 @@ dataset_params: {
 }
 
 optimizer_params: {
-    lr: 3.0e-5,
+    lr: 0.1,
 }
 
 scheduler_params: {
-    gamma: 0.05,
+    gamma: 0.444,
 }
 
 model_params: {
@@ -65,7 +65,7 @@ run_params: {
     apply_lars: True,
     scheduler: "exponential",
     disable_cuda: False,
-    epochs: 40,
+    epochs: 20,
     batch_size: 100,
     validation_size: 50,
     tracking_frequency: 1,

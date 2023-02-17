@@ -70,6 +70,8 @@ class Train:
         self.block_size = self.track_freq * self.batch_size
         self.classes = self.train_cfgs.classes
         self.selected_model = self.train_cfgs.model
+        self.sel_optim = self.train_cfgs.optimizer
+        self.sel_scheduler = self.train_cfgs.scheduler
 
         self.model_dict = defaultdict(timm.create_model, {
             "custom_densenet": DenseNet,
@@ -136,7 +138,8 @@ class Train:
                                                          **self.optimizer_cfgs)
         if self.optimizer_state != None:
             self.optimizer.load_state_dict(self.optimizer_state)
-
+        if self.train_cfgs.apply_lars:
+            self.optimizer = LARS(self.optimizer)
         if self.sel_scheduler == None:
             self.scheduler = self._null_scheduler()
         else:
