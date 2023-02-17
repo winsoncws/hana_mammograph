@@ -11,18 +11,26 @@ import torch.nn.functional as F
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
-from torch.optim import Adam
-from torch.optim.lr_scheduler import CyclicLR
+from torch.optim import SGD, Adam
+from torch.optim.lr_scheduler import ExponentialLR, CyclicLR
 from torch.distributed import init_process_group, destroy_process_group
 import torch.multiprocessing as mp
 from torchmetrics.functional.classification import binary_f1_score
 import timm
+from torchlars import LARS
 from dataset import MammoH5Data, GroupDistSampler, DoubleBalancedGroupDistSampler
 from models import DenseNet
 from utils import printProgressBarRatio
 
 # ViT transfer learning model? Inception net model?
 
+class NullScheduler:
+
+    def __init__(self, lr):
+        self.lr = lr
+
+    def get_last_lr(self):
+        return self.lr
 
 class Train:
 
@@ -65,6 +73,15 @@ class Train:
 
         self.model_dict = defaultdict(timm.create_model, {
             "custom_densenet": DenseNet,
+        })
+
+        self.optim_dict = defaultdict(Adam, {
+            "adam": Adam,
+            "sgd": SGD,
+        })
+        self.scheduler_dict = defaultdict(None, {
+            "exponential": ExponentialLR,
+            "cyclic": CyclicLR,
         })
 
         self.met_name = "PFbeta"
@@ -115,10 +132,16 @@ class Train:
             model.load_state_dict(self.model_state)
             print(f"gpu_id: {gpu_id} - model loaded.")
         self.model = DDP(model, device_ids=[gpu_id])
-        self.optimizer = Adam(self.model.parameters(), **self.optimizer_cfgs)
+        self.optimizer = self.optim_dict[self.sel_optim](self.model.parameters(),
+                                                         **self.optimizer_cfgs)
         if self.optimizer_state != None:
             self.optimizer.load_state_dict(self.optimizer_state)
-        self.scheduler = CyclicLR(self.optimizer, **self.scheduler_cfgs)
+
+        if self.sel_scheduler == None:
+            self.scheduler = self._null_scheduler()
+        else:
+            self.scheduler = self.scheduler_dict[self.sel_scheduler)](self.optimizer,
+                                                                      **self.scheduler_cfgs)
         # a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
                                                # dtype=np.float32)).to(self.device)
         best_score = 0.
@@ -145,6 +168,7 @@ class Train:
                 # Training loop
                 self.model.train()
                 for batch, (img_id, inp, gt) in enumerate(self.trainloader):
+
                     last_lr = self.scheduler.get_last_lr()[0]
                     self.optimizer.zero_grad()
                     out = self.model(inp)
@@ -158,7 +182,6 @@ class Train:
                     loss.backward()
                     self.optimizer.step()
                     if (gpu_id == 0) and ((batch + 1) % self.track_freq == 0):
-                        self.scheduler.step()
                         preds = torch.cat(preds).squeeze()
                         truths = torch.cat(truths).squeeze()
                         bf1 = binary_f1_score(preds, truths)
@@ -173,6 +196,7 @@ class Train:
                         truths = []
 
             # Validation loop;  every epoch
+            self.scheduler.step()
             self.model.eval()
             samples = []
             probs = []
