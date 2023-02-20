@@ -69,11 +69,11 @@ class Train:
         self.track_freq = self.train_cfgs.tracking_frequency
         self.block_size = self.track_freq * self.batch_size
         self.classes = self.train_cfgs.classes
-        self.selected_model = self.train_cfgs.model
+        self.model_name = self.train_cfgs.model
         self.sel_optim = self.train_cfgs.optimizer
         self.sel_scheduler = self.train_cfgs.scheduler
 
-        self.model_dict = defaultdict(timm.create_model, {
+        self.model_dict = defaultdict(self._def_model, {
             "custom_densenet": DenseNet,
         })
 
@@ -97,6 +97,9 @@ class Train:
             self.data_ids = Dict(json.load(f))
 
         self.e = 1e-6
+
+    def _def_model(self):
+        return timm.create_model
 
     def _CheckMakeDirs(self, filepath):
         if not isdir(dirname(filepath)): os.makedirs(dirname(filepath))
@@ -129,7 +132,7 @@ class Train:
         self.trainloader = DataLoader(self.data, self.batch_size, sampler=self.train_sampler)
         self.validloader = DataLoader(self.data, self.val_size, sampler=self.val_sampler)
         self.total_val_size = self.val_sampler.num_samples
-        model = self.model_dict[self.selected_model](**self.model_cfgs).to(gpu_id)
+        model = self.model_dict[self.model_name](self.model_name, **self.model_cfgs).to(gpu_id)
         if self.model_state != None:
             model.load_state_dict(self.model_state)
             print(f"gpu_id: {gpu_id} - model loaded.")

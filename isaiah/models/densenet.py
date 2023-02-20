@@ -158,6 +158,7 @@ class DenseNet(nn.Module):
 
     def __init__(
         self,
+        name: str,
         growth_rate: int = 32,
         block_config: Tuple[int, int, int, int] = (6, 12, 24, 16),
         num_init_features: int = 64,
@@ -167,6 +168,7 @@ class DenseNet(nn.Module):
         memory_efficient: bool = False,
     ) -> None:
 
+        self.name = name
         super().__init__()
         _log_api_usage_once(self)
 
