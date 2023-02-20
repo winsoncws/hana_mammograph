@@ -178,6 +178,7 @@ class Train:
                     last_lr = self.scheduler.get_last_lr()[0]
                     self.optimizer.zero_grad()
                     p = self.model(inp)
+                    p = torch.sigmoid(p)
                     # c1 = F.binary_cross_entropy_with_logits(out[:, :4], gt[:, :4], reduction="none")
                     # c2 = F.l1_loss(out[:, 4:], gt[:, 4:], reduction="none")
                     # loss = torch.sum(a[:, :4]*c1) + torch.sum(a[:, 4:]*c2)

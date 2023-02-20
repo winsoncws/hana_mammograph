@@ -225,5 +225,4 @@ class DenseNet(nn.Module):
         out = F.adaptive_avg_pool2d(out, (1, 1))
         out = torch.flatten(out, 1)
         out = self.classifier(out)
-        out = nn.Sigmoid(out)
         return out

@@ -1,4 +1,5 @@
 import sys, os
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 from os.path import abspath, dirname, join, basename, isdir
 import torch
 from train_ddp import Train

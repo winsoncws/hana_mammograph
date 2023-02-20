@@ -41,11 +41,11 @@ dataset_params: {
 }
 
 optimizer_params: {
-    lr: 1.,
+    lr: 0.001,
 }
 
 scheduler_params: {
-    gamma: 0.506,
+    gamma: 0.709,
 }
 
 model_params: {
