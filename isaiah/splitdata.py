@@ -24,8 +24,16 @@ def SplitData(metadata_path, savepath, test_set=False, num_samples=None, test_si
         output.test.cancer = pos_indices
         output.test.healthy = neg_indices
     else:
-        output.train.cancer, output.val.cancer = train_test_split(pos_indices, test_size=test_size)
-        output.train.healthy, output.val.healthy = train_test_split(neg_indices, test_size=test_size)
+        if pos_indices:
+            output.train.cancer, output.val.cancer = train_test_split(pos_indices, test_size=test_size)
+        else:
+            output.train.cancer = pos_indices
+            output.val.cancer = pos_indices
+        if neg_indices:
+            output.train.healthy, output.val.healthy = train_test_split(neg_indices, test_size=test_size)
+        else:
+            output.train.healthy = neg_indices
+            output.val.healthy = neg_indices
     with open(savepath, "w") as f:
         json.dump(output, f)
 

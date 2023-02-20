@@ -120,7 +120,7 @@ class MammoPreprocess:
             print(f"WARNING: {self.img_id} input image size is smaller than output image size.")
         else:
             end_shape = (np.asarray(resolution) * (im.shape/np.max(im.shape))).astype(np.int16)[::-1]
-            im = cv2.resize(im, dsize=end_shape, interpolation=cv2.INTER_CUBIC)
+            im = cv2.resize(im, dsize=end_shape, interpolation=cv2.INTER_NEAREST)
         return im
 
     def Pad(self, im):
@@ -147,8 +147,6 @@ class MammoPreprocess:
         if len(stats) > 1:
             obj_idx = np.argmax(stats[1:]) + 1
             x1,y1,x2,y2 = regionprops(1*(mask == obj_idx))[0].bbox
-            h = x2-x1
-            w = y2-y1
             res = im[x1:x2, y1:y2]
         else:
             res = im
