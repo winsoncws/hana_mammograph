@@ -17,7 +17,6 @@ from torch.distributed import init_process_group, destroy_process_group
 import torch.multiprocessing as mp
 from torchmetrics.functional.classification import binary_f1_score
 import timm
-from torchlars import LARS
 from dataset import MammoH5Data, GroupDistSampler, DoubleBalancedGroupDistSampler
 from models import DenseNet
 from utils import printProgressBarRatio
@@ -88,7 +87,6 @@ class Train:
 
         self.met_name = "PFbeta"
         self.labels = self.data_cfgs.labels
-        self.ratio = self.data_cfgs.sample_ratio
         self.loss_weight_map = {}
         for i, key in enumerate(self.labels):
             self.loss_weight_map[key] = self.train_cfgs.loss_weights[i]
@@ -141,8 +139,6 @@ class Train:
                                                          **self.optimizer_cfgs)
         if self.optimizer_state != None:
             self.optimizer.load_state_dict(self.optimizer_state)
-        if self.train_cfgs.apply_lars:
-            self.optimizer = LARS(self.optimizer)
         if self.sel_scheduler == None:
             self.scheduler = NullScheduler()
         else:
@@ -163,9 +159,10 @@ class Train:
             train_writer = csv.writer(train_log)
             eval_writer = csv.writer(eval_log)
             train_writer.writerow(["epoch", "block", "learning_rate",
-                             "predictions", "truths", "loss", "f1_score"])
+                                   "predictions", "truths", "loss", "cancer_f1",
+                                   "lat_f1"])
             eval_writer.writerow(["epoch", "samples", "predictions", "truths",
-                                  "f1_score"])
+                                  "cancer_f1", "lat_f1"])
         for epoch in range(1, self.epochs + 1):
             self.train_sampler.set_epoch(epoch)
             self.val_sampler.set_epoch(epoch)
@@ -174,7 +171,6 @@ class Train:
                 # Training loop
                 self.model.train()
                 for batch, (img_id, inp, gt) in enumerate(self.trainloader):
-
                     last_lr = self.scheduler.get_last_lr()[0]
                     self.optimizer.zero_grad()
                     p = self.model(inp)
@@ -190,10 +186,11 @@ class Train:
                     if (gpu_id == 0) and ((batch + 1) % self.track_freq == 0):
                         preds = torch.cat(preds).squeeze()
                         truths = torch.cat(truths).squeeze()
-                        bf1 = binary_f1_score(preds, truths)
+                        bf1 = binary_f1_score(preds[:, 0], truths[:, 0])
+                        blatf1 = binary_f1_score(preds[:, 1], truths[:, 1])
                         train_writer.writerow([epoch, block, last_lr, preds.cpu().tolist(),
                                          truths.cpu().tolist(), loss.detach().to("cpu").item(),
-                                         bf1.item()])
+                                         bf1.item(), blatf1.item()])
                         print((f"epoch {epoch}/{self.epochs} | block: {block}, block_size: {self.block_size} | "
                                f"loss: {loss.item():.5f}, block_f1: {bf1:.3f}, "
                                f"{self.met_name}: {sco:.3f}, best: {best_score:.3f}"))
@@ -214,11 +211,11 @@ class Train:
             samples = torch.cat(samples)
             probs = torch.cat(probs)
             labels = torch.cat(labels)
-            sam_gather = [torch.zeros((self.total_val_size, 1),
+            sam_gather = [torch.zeros((self.total_val_size, len(self.labels)),
                                        dtype=torch.int64).to(probs.device) for _ in range(self.no_gpus)]
-            probs_gather = [torch.zeros((self.total_val_size, 1),
+            probs_gather = [torch.zeros((self.total_val_size, len(self.labels)),
                                         dtype=torch.float32).to(probs.device) for _ in range(self.no_gpus)]
-            labels_gather = [torch.zeros((self.total_val_size, 1),
+            labels_gather = [torch.zeros((self.total_val_size, len(self.labels)),
                                          dtype=torch.float32).to(probs.device) for _ in range(self.no_gpus)]
             dist.all_gather(sam_gather, samples)
             dist.all_gather(probs_gather, probs)
@@ -227,9 +224,10 @@ class Train:
             all_probs = torch.cat(probs_gather).squeeze()
             all_labels = torch.cat(labels_gather).squeeze()
             if gpu_id == 0:
-                sco = binary_f1_score(all_probs, all_labels)
+                sco = binary_f1_score(all_probs[:, 0], all_labels[:, 0])
+                lsco = binary_f1_score(all_probs[:, 1], all_labels[:, 1])
                 eval_writer.writerow([epoch, all_samples.cpu().tolist(), all_probs.cpu().tolist(),
-                                      all_labels.cpu().tolist(), sco.item()])
+                                      all_labels.cpu().tolist(), sco.item(), lsco.item()])
                 state = {
                     "model": self.model.module.state_dict(),
                     "optimizer": self.optimizer.state_dict()
