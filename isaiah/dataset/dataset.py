@@ -37,9 +37,10 @@ class MammoH5Data(Dataset):
             {
                 "contrast_brightness": tio.RescaleIntensity(out_min_max=(0, 1),
                                                             percentiles=(0, 99.5)),
-                "spatial": tio.OneOf({tio.RandomAffine(): 0.75,
-                                      tio.RandomFlip(): 0.25}),
-                "noise": tio.RandomNoise(),
+                "flip": tio.RandomFlip()
+                "rotate": tio.RandomAffine()
+                "noise": tio.OneOf({tio.RandomNoise(std=(0., 0.15)): 0.75,
+                                    tio.RandomBlur(std=(0., 1.)): 0.25}),
             }
         )
         self.aug = cfgs.augmentations
