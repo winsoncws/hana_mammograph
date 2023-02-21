@@ -37,12 +37,14 @@ class MammoH5Data(Dataset):
             {
                 "contrast_brightness": tio.RescaleIntensity(out_min_max=(0, 1),
                                                             percentiles=(0, 99.5)),
-                "flip": tio.RandomFlip()
-                "rotate": tio.RandomAffine()
-                "noise": tio.OneOf({tio.RandomNoise(std=(0., 0.15)): 0.75,
+                "flip": tio.Lambda(self._CustomFlip),
+                "rotate": tio.RandomAffine(),
+                "noise": tio.OneOf({tio.RandomNoise(std=(0., 0.1)): 0.75,
                                     tio.RandomBlur(std=(0., 1.)): 0.25}),
             }
         )
+        self.flip_list = [0, 0, 1, 2]
+        self.flip_lat = {"0.0": 1., "1.0": 0., "1": 0, "0": 1}
         self.aug = cfgs.augmentations
         self.labels = cfgs.labels
         self.ReadMetadata() # reads data into self.metadata
@@ -57,12 +59,24 @@ class MammoH5Data(Dataset):
             ds: h5py.Dataset = f.get(key)
             ds_arr = np.zeros_like(ds, dtype=np.float32)
             ds.read_direct(ds_arr)
-        md = self.metadata.loc[key, self.labels].to_numpy(np.float32)
+        md = self.metadata.loc[key, self.labels].copy(deep=True)
+        self.flip_axis = np.random.choice(self.flip_list, 1).tolist()
+        if (self.flip_axis[0] == 2) & ("laterality" in self.labels):
+            md.loc["laterality"] = self.flip_lat[str(md.loc["laterality"])]
+        md = md.to_numpy(np.float32)
         ds_aug = self.Augment(np.expand_dims(ds_arr, axis=(0, 3))).squeeze(-1)
         keyT = torch.tensor(int(key), dtype=torch.int64).to(self.device)
         mdT = torch.from_numpy(md).to(self.device)
         dsT = torch.from_numpy(ds_aug).to(self.device)
-        return keyT, dsT, mdT
+        dsoT = torch.from_numpy(np.expand_dims(ds_arr, axis=0))
+        return keyT, dsT, mdT, dsoT
+
+    def _CustomFlip(self, im):
+        if self.flip_axis[0] == 0:
+            pass
+        else:
+            im = torch.flip(im, self.flip_axis)
+        return im
 
     def _ReadCSV(self):
         self.metadata = pd.read_csv(self.metadata_path)
