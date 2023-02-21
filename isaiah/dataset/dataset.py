@@ -68,8 +68,7 @@ class MammoH5Data(Dataset):
         keyT = torch.tensor(int(key), dtype=torch.int64).to(self.device)
         mdT = torch.from_numpy(md).to(self.device)
         dsT = torch.from_numpy(ds_aug).to(self.device)
-        dsoT = torch.from_numpy(np.expand_dims(ds_arr, axis=0))
-        return keyT, dsT, mdT, dsoT
+        return keyT, dsT, mdT
 
     def _CustomFlip(self, im):
         if self.flip_axis[0] == 0:
