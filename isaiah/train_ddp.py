@@ -3,9 +3,7 @@ from os.path import isdir, abspath, dirname
 from collections import defaultdict
 import numpy as np
 import json
-import csv
-from addict import Dict
-import torch
+import csv from addict import Dict import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
@@ -15,7 +13,7 @@ from torch.optim import SGD, Adam
 from torch.optim.lr_scheduler import ExponentialLR, CyclicLR
 from torch.distributed import init_process_group, destroy_process_group
 import torch.multiprocessing as mp
-from torchmetrics.functional.classification import binary_f1_score
+from torchmetrics.functional.classification import multilabel_f1_score
 import timm
 from dataset import MammoH5Data, GroupDistSampler, DoubleBalancedGroupDistSampler
 from models import DenseNet
@@ -71,6 +69,7 @@ class Train:
         self.model_name = self.train_cfgs.model
         self.sel_optim = self.train_cfgs.optimizer
         self.sel_scheduler = self.train_cfgs.scheduler
+        self.loss_weights = torch.tensor(self.train_cfgs.loss_weights, dtype=torch.float32)
 
         self.model_dict = defaultdict(self._def_model, {
             "custom_densenet": DenseNet,
@@ -87,9 +86,8 @@ class Train:
 
         self.met_name = "PFbeta"
         self.labels = self.data_cfgs.labels
-        self.loss_weight_map = {}
-        for i, key in enumerate(self.labels):
-            self.loss_weight_map[key] = self.train_cfgs.loss_weights[i]
+        assert len(self.labels) == len(self.loss_weights)
+        assert len(self.labels) == self.model_cfgs.num_classes
 
         with open(self.data_ids_path, "r") as f:
             self.data_ids = Dict(json.load(f))
@@ -159,10 +157,9 @@ class Train:
             train_writer = csv.writer(train_log)
             eval_writer = csv.writer(eval_log)
             train_writer.writerow(["epoch", "block", "learning_rate",
-                                   "predictions", "truths", "loss", "cancer_f1",
-                                   "lat_f1"])
+                                   "predictions", "truths", "loss", "f1_scores"])
             eval_writer.writerow(["epoch", "samples", "predictions", "truths",
-                                  "cancer_f1", "lat_f1"])
+                                  "f1_scores"])
         for epoch in range(1, self.epochs + 1):
             self.train_sampler.set_epoch(epoch)
             self.val_sampler.set_epoch(epoch)
@@ -175,22 +172,19 @@ class Train:
                     self.optimizer.zero_grad()
                     p = self.model(inp)
                     p = torch.sigmoid(p)
-                    # c1 = F.binary_cross_entropy_with_logits(out[:, :4], gt[:, :4], reduction="none")
-                    # c2 = F.l1_loss(out[:, 4:], gt[:, 4:], reduction="none")
-                    # loss = torch.sum(a[:, :4]*c1) + torch.sum(a[:, 4:]*c2)
                     preds.append(p.detach())
                     truths.append(gt.detach())
-                    loss = F.binary_cross_entropy(p, gt)
+                    loss = F.binary_cross_entropy(p, gt, weight=self.loss_weights)
                     loss.backward()
                     self.optimizer.step()
                     if (gpu_id == 0) and ((batch + 1) % self.track_freq == 0):
                         preds = torch.cat(preds).squeeze()
                         truths = torch.cat(truths).squeeze()
-                        bf1 = binary_f1_score(preds[:, 0], truths[:, 0])
-                        blatf1 = binary_f1_score(preds[:, 1], truths[:, 1])
+                        bf1 = multilabel_f1_score(preds, truths, len(self.labels),
+                                                  average="none")
                         train_writer.writerow([epoch, block, last_lr, preds.cpu().tolist(),
                                          truths.cpu().tolist(), loss.detach().to("cpu").item(),
-                                         bf1.item(), blatf1.item()])
+                                         bf1.tolist()])
                         print((f"epoch {epoch}/{self.epochs} | block: {block}, block_size: {self.block_size} | "
                                f"loss: {loss.item():.5f}, block_f1: {bf1:.3f}, "
                                f"{self.met_name}: {sco:.3f}, best: {best_score:.3f}"))
@@ -220,14 +214,14 @@ class Train:
             dist.all_gather(sam_gather, samples)
             dist.all_gather(probs_gather, probs)
             dist.all_gather(labels_gather, labels)
-            all_samples = torch.cat(sam_gather).squeeze()
-            all_probs = torch.cat(probs_gather).squeeze()
-            all_labels = torch.cat(labels_gather).squeeze()
+            all_samples = torch.cat(sam_gather)
+            all_probs = torch.cat(probs_gather)
+            all_labels = torch.cat(labels_gather)
             if gpu_id == 0:
-                sco = binary_f1_score(all_probs[:, 0], all_labels[:, 0])
-                lsco = binary_f1_score(all_probs[:, 1], all_labels[:, 1])
+                sco = multilabel_f1_score(all_probs, all_labels, len(self.labels),
+                                          average="none")
                 eval_writer.writerow([epoch, all_samples.cpu().tolist(), all_probs.cpu().tolist(),
-                                      all_labels.cpu().tolist(), sco.item(), lsco.item()])
+                                      all_labels.cpu().tolist(), sco.cpu().tolist()])
                 state = {
                     "model": self.model.module.state_dict(),
                     "optimizer": self.optimizer.state_dict()
