@@ -182,11 +182,12 @@ class Train:
                         truths = torch.cat(truths).squeeze()
                         bf1 = multilabel_f1_score(preds, truths, len(self.labels),
                                                   average="none")
+                        cbf1 = bf1[0]
                         train_writer.writerow([epoch, block, last_lr, preds.cpu().tolist(),
                                          truths.cpu().tolist(), loss.detach().to("cpu").item(),
                                          bf1.tolist()])
                         print((f"epoch {epoch}/{self.epochs} | block: {block}, block_size: {self.block_size} | "
-                               f"loss: {loss.item():.5f}, block_f1: {bf1:.3f}, "
+                               f"loss: {loss.item():.5f}, block_f1: {cbf1:.3f}, "
                                f"{self.met_name}: {sco:.3f}, best: {best_score:.3f}"))
                         block += 1
                         preds = []
@@ -218,8 +219,9 @@ class Train:
             all_probs = torch.cat(probs_gather)
             all_labels = torch.cat(labels_gather)
             if gpu_id == 0:
-                sco = multilabel_f1_score(all_probs, all_labels, len(self.labels),
+                ef1 = multilabel_f1_score(all_probs, all_labels, len(self.labels),
                                           average="none")
+                sco = ef1[0]
                 eval_writer.writerow([epoch, all_samples.cpu().tolist(), all_probs.cpu().tolist(),
                                       all_labels.cpu().tolist(), sco.cpu().tolist()])
                 state = {
