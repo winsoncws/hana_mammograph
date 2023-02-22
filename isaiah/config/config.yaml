@@ -1,15 +1,15 @@
 paths: {
     data_src: "/home/dataset/kaggle/input/train_images/",
-    data_dest: "/home/isaiah/kaggle/mammo/preprocessed/mammodata224_2.h5",
+    data_dest: "/home/isaiah/kaggle/mammo/preprocessed/mammodata224.h5",
     metadata_src: "/home/dataset/kaggle/input/train.csv",
     metadata_dest: "/home/isaiah/kaggle/mammo/preprocessed/metadata.json",
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_split.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
-    model_load_src: null,
-    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230221/densenet_ckpt_01.pth",
-    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230221/densenet_best_01.pth",
-    train_report_path: "/home/isaiah/kaggle/mammo/results/20230221/densenet_train_rep_01.csv",
-    eval_report_path: "/home/isaiah/kaggle/mammo/results/20230221/densenet_eval_rep_01.csv",
+    model_load_src: "/home/isaiah/kaggle/mammo/results/20230221/densenet_ckpt_01.pth",
+    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230222/densenet_ckpt_01.pth",
+    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230222/densenet_best_01.pth",
+    train_report_path: "/home/isaiah/kaggle/mammo/results/20230222/densenet_train_rep_01.csv",
+    eval_report_path: "/home/isaiah/kaggle/mammo/results/20230222/densenet_eval_rep_01.csv",
 }
 
 preprocess_params: {
@@ -40,16 +40,19 @@ dataset_params: {
 }
 
 optimizer_params: {
-    lr: 0.001,
+    lr: 3.0e-5,
 }
 
 scheduler_params: {
-    gamma: 0.709,
+    base_lr: 1.0e-4,
+    max_lr: 6.0e-5,
+    step_size_up: 100,
+    cycle_momentum: False,
 }
 
 model_params: {
     in_chans: 1,
-    num_classes: 1,
+    num_classes: 2,
     pretrained: False,
 }
 
@@ -57,12 +60,12 @@ run_params: {
     model: "resnet18",
     train: True,
     optimizer: "adam",
-    scheduler: "exponential",
+    scheduler: "cyclic",
     disable_cuda: False,
     epochs: 20,
     batch_size: 100,
     validation_size: 50,
     tracking_frequency: 1,
-    loss_weights: [0.8, 0.2],
+    loss_weights: [0.9, 0.1],
     classes: ['cancer', 'healthy']
 }

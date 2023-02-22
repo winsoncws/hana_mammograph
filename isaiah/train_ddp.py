@@ -211,7 +211,7 @@ class Train:
             samples = torch.cat(samples)
             probs = torch.cat(probs)
             labels = torch.cat(labels)
-            sam_gather = [torch.zeros((self.total_val_size, len(self.labels)),
+            sam_gather = [torch.zeros((self.total_val_size, 1),
                                        dtype=torch.int64).to(probs.device) for _ in range(self.no_gpus)]
             probs_gather = [torch.zeros((self.total_val_size, len(self.labels)),
                                         dtype=torch.float32).to(probs.device) for _ in range(self.no_gpus)]
