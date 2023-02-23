@@ -3,7 +3,9 @@ from os.path import isdir, abspath, dirname
 from collections import defaultdict
 import numpy as np
 import json
-import csv from addict import Dict import torch
+import csv
+from addict import Dict
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
@@ -69,7 +71,7 @@ class Train:
         self.model_name = self.train_cfgs.model
         self.sel_optim = self.train_cfgs.optimizer
         self.sel_scheduler = self.train_cfgs.scheduler
-        self.loss_weights = torch.tensor(self.train_cfgs.loss_weights, dtype=torch.float32)
+        self.loss_weights = self.train_cfgs.loss_weights
 
         self.model_dict = defaultdict(self._def_model, {
             "custom_densenet": DenseNet,
@@ -142,8 +144,11 @@ class Train:
         else:
             self.scheduler = self.scheduler_dict[self.sel_scheduler](self.optimizer,
                                                                       **self.scheduler_cfgs)
-        # a = torch.from_numpy(np.array([[self.loss_weight_map[key] for key in self.labels]],
-                                               # dtype=np.float32)).to(self.device)
+        if self.sel_scheduler == "cyclic":
+            for _ in range(self.scheduler_cfgs.step_size_up):
+                self.scheduler.step()
+
+        weights = torch.tensor(self.loss_weights, dtype=torch.float32).to(gpu_id)
         best_score = 0.
         sco = 0.
         block = 1
@@ -174,9 +179,11 @@ class Train:
                     p = torch.sigmoid(p)
                     preds.append(p.detach())
                     truths.append(gt.detach())
-                    loss = F.binary_cross_entropy(p, gt, weight=self.loss_weights)
+                    loss = F.binary_cross_entropy(p, gt, weight=weights)
                     loss.backward()
                     self.optimizer.step()
+                    if self.sel_scheduler == "cyclic":
+                        self.scheduler.step()
                     if (gpu_id == 0) and ((batch + 1) % self.track_freq == 0):
                         preds = torch.cat(preds).squeeze()
                         truths = torch.cat(truths).squeeze()
@@ -194,7 +201,8 @@ class Train:
                         truths = []
 
             # Validation loop;  every epoch
-            self.scheduler.step()
+            if self.sel_scheduler != "cyclic":
+                self.scheduler.step()
             self.model.eval()
             samples = []
             probs = []
@@ -223,7 +231,7 @@ class Train:
                                           average="none")
                 sco = ef1[0]
                 eval_writer.writerow([epoch, all_samples.cpu().tolist(), all_probs.cpu().tolist(),
-                                      all_labels.cpu().tolist(), sco.cpu().tolist()])
+                                      all_labels.cpu().tolist(), ef1.cpu().tolist()])
                 state = {
                     "model": self.model.module.state_dict(),
                     "optimizer": self.optimizer.state_dict()
