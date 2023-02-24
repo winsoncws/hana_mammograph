@@ -87,8 +87,8 @@ class Train:
             "exponential": ExponentialLR,
             "cyclic": CyclicLR,
         })
-        reg_msg = "Regularizer not present!"
-        self.reg_dict = defaultdict(self._ThrowExcept(reg_msg), {
+        self.reg_msg = "Regularizer not present!"
+        self.reg_dict = defaultdict(self._ThrowExcept, {
             "tpr": self._RegTPR,
         })
 
@@ -103,8 +103,8 @@ class Train:
 
         self.e = 1e-6
 
-    def _ThrowExcept(self, message):
-        raise Exception(message)
+    def _ThrowExcept(self, **kwargs):
+        raise Exception(self.reg_msg)
 
     def _DefModel(self):
         return timm.create_model
@@ -205,7 +205,7 @@ class Train:
                     p = torch.sigmoid(p)
                     preds.append(p.detach())
                     truths.append(gt.detach())
-                    criterion = F.binary_cross_entropy(p, gt, weight=weights)
+                    criterion = F.binary_cross_entropy(p, gt, weight=label_weights)
                     reg = self._Regularization(p, gt, gpu_id)
                     loss = torch.sum(loss_weights * torch.cat([criterion, reg]))
                     loss.backward()
