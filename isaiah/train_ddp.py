@@ -109,19 +109,17 @@ class Train:
     def _DefModel(self):
         return timm.create_model
 
-    def _Regularization(self, preds, truths, rank, indices: list[int]=[0]):
-        reg = torch.tensor(0., dtype=torch.float32).to(rank)
+    def _Regularization(self, preds, truths, weights, rank, indices: list[int]=[0]):
+        reg = torch.zeros((len(self.labels)), dtype=torch.float32).to(rank)
         for reg_name in self.sel_regs:
             torch.add(reg, self.reg_dict[reg_name](preds[:, indices],
                                                    truths[:, indices]))
-        return reg
+        return torch.sum(reg * weights)
 
-    def _RegTPR(self, preds, truths):
-        preds = torch.round(preds)
-        truths = torch.round(truths)
-        tp = torch.sum((preds == 1) & (truths == 1))
-        ap = torch.sum(truths == 1)
-        tpr = tp.float() / ap.float() if ap.float() > 0. else 0.
+    def _RegTPR(self, preds, truths, reduce_axis=(0,), e=1.0e-8):
+        tp = torch.sum(preds*truths, reduce_axis)
+        ap = torch.sum(preds, reduce_axis)
+        tpr = (tp + e) / (ap + e)
         return tpr
 
     def _CheckMakeDirs(self, filepath):
@@ -206,7 +204,7 @@ class Train:
                     preds.append(p.detach())
                     truths.append(gt.detach())
                     criterion = F.binary_cross_entropy(p, gt, weight=label_weights)
-                    reg = self._Regularization(p, gt, gpu_id)
+                    reg = self._Regularization(p, gt, label_weights, gpu_id)
                     loss = torch.sum(loss_weights * torch.cat([criterion, reg]))
                     loss.backward()
                     self.optimizer.step()
