@@ -5,11 +5,11 @@ paths: {
     metadata_dest: "/home/isaiah/kaggle/mammo/preprocessed/metadata_2.json",
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_split_2.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
-    model_load_src: null,
-    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230223/densenet_ckpt_03.pth",
-    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230223/densenet_best_03.pth",
-    train_report_path: "/home/isaiah/kaggle/mammo/results/20230223/densenet_train_rep_03.csv",
-    eval_report_path: "/home/isaiah/kaggle/mammo/results/20230223/densenet_eval_rep_03.csv",
+    model_load_src: "/home/isaiah/kaggle/mammo/results/20230223/densenet_ckpt_03.pth",
+    model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230224/densenet_ckpt_01.pth",
+    model_best_dest: "/home/isaiah/kaggle/mammo/results/20230224/densenet_best_01.pth",
+    train_report_path: "/home/isaiah/kaggle/mammo/results/20230224/densenet_train_rep_01.csv",
+    eval_report_path: "/home/isaiah/kaggle/mammo/results/20230224/densenet_eval_rep_01.csv",
 }
 
 preprocess_params: {
@@ -41,6 +41,7 @@ dataset_params: {
 
 optimizer_params: {
     lr: 3.0e-5,
+    weight_decay: 1.0e-4,
 }
 
 scheduler_params: {
@@ -55,18 +56,21 @@ model_params: {
     in_chans: 1,
     num_classes: 4,
     pretrained: False,
+    drop_rate: 0.5,
 }
 
 run_params: {
     model: "resnet18",
     train: True,
-    optimizer: "adam",
+    optimizer: "adamw",
     scheduler: "cyclic",
+    regularizers: ["tpr"],
     disable_cuda: False,
     epochs: 20,
     batch_size: 100,
     validation_size: 50,
     tracking_frequency: 1,
-    loss_weights: [0.79, 0.1, 0.1, 0.01],
-    classes: ['cancer', 'healthy']
+    loss_weights: [0.95, 0.05],
+    label_weights: [0.79, 0.1, 0.1, 0.01],
+    classes: ['cancer', 'healthy'],
 }

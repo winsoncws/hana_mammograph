@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
-from torch.optim import SGD, Adam
+from torch.optim import SGD, Adam, AdamW
 from torch.optim.lr_scheduler import ExponentialLR, CyclicLR
 from torch.distributed import init_process_group, destroy_process_group
 import torch.multiprocessing as mp
@@ -71,33 +71,58 @@ class Train:
         self.model_name = self.train_cfgs.model
         self.sel_optim = self.train_cfgs.optimizer
         self.sel_scheduler = self.train_cfgs.scheduler
+        self.sel_regs = self.train_cfgs.regulraizers
+        self.label_weights = self.train_cfgs.label_weights
         self.loss_weights = self.train_cfgs.loss_weights
 
-        self.model_dict = defaultdict(self._def_model, {
+        self.model_dict = defaultdict(self._DefModel, {
             "custom_densenet": DenseNet,
         })
-
         self.optim_dict = defaultdict(Adam, {
             "adam": Adam,
+            "adamw": AdamW,
             "sgd": SGD,
         })
         self.scheduler_dict = defaultdict(None, {
             "exponential": ExponentialLR,
             "cyclic": CyclicLR,
         })
+        reg_msg = "Regularizer not present!"
+        self.reg_dict = defaultdict(self._ThrowExcept(reg_msg), {
+            "tpr": self._RegTPR,
+        })
 
         self.met_name = "PFbeta"
         self.labels = self.data_cfgs.labels
-        assert len(self.labels) == len(self.loss_weights)
+        assert len(self.labels) == len(self.label_weights)
         assert len(self.labels) == self.model_cfgs.num_classes
+        assert len(self.loss_weights) == 2
 
         with open(self.data_ids_path, "r") as f:
             self.data_ids = Dict(json.load(f))
 
         self.e = 1e-6
 
-    def _def_model(self):
+    def _ThrowExcept(self, message):
+        raise Exception(message)
+
+    def _DefModel(self):
         return timm.create_model
+
+    def _Regularization(self, preds, truths, rank, indices: list[int]=[0]):
+        reg = torch.tensor(0., dtype=torch.float32).to(rank)
+        for reg_name in self.sel_regs:
+            torch.add(reg, self.reg_dict[reg_name](preds[:, indices],
+                                                   truths[:, indices]))
+        return reg
+
+    def _RegTPR(self, preds, truths):
+        preds = torch.round(preds)
+        truths = torch.round(truths)
+        tp = torch.sum((preds == 1) & (truths == 1))
+        ap = torch.sum(truths == 1)
+        tpr = tp.float() / ap.float() if ap.float() > 0. else 0.
+        return tpr
 
     def _CheckMakeDirs(self, filepath):
         if not isdir(dirname(filepath)): os.makedirs(dirname(filepath))
@@ -148,7 +173,8 @@ class Train:
             for _ in range(self.scheduler_cfgs.step_size_up):
                 self.scheduler.step()
 
-        weights = torch.tensor(self.loss_weights, dtype=torch.float32).to(gpu_id)
+        label_weights = torch.tensor(self.label_weights, dtype=torch.float32).to(gpu_id)
+        loss_weights = torch.tensor(self.loss_weights, dtype=torch.float32).to(gpu_id)
         best_score = 0.
         sco = 0.
         block = 1
@@ -179,7 +205,9 @@ class Train:
                     p = torch.sigmoid(p)
                     preds.append(p.detach())
                     truths.append(gt.detach())
-                    loss = F.binary_cross_entropy(p, gt, weight=weights)
+                    criterion = F.binary_cross_entropy(p, gt, weight=weights)
+                    reg = self._Regularization(p, gt, gpu_id)
+                    loss = torch.sum(loss_weights * torch.cat([criterion, reg]))
                     loss.backward()
                     self.optimizer.step()
                     if self.sel_scheduler == "cyclic":
