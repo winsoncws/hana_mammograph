@@ -5,7 +5,7 @@ paths: {
     metadata_dest: "/home/isaiah/kaggle/mammo/preprocessed/metadata_2.json",
     data_ids_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_split_2.json",
     timesheet_dest: "/home/isaiah/kaggle/mammo/preprocessed/train_timesheet.json",
-    model_load_src: "/home/isaiah/kaggle/mammo/results/20230223/densenet_ckpt_03.pth",
+    model_load_src: null,
     model_ckpts_dest: "/home/isaiah/kaggle/mammo/results/20230224/densenet_ckpt_01.pth",
     model_best_dest: "/home/isaiah/kaggle/mammo/results/20230224/densenet_best_01.pth",
     train_report_path: "/home/isaiah/kaggle/mammo/results/20230224/densenet_train_rep_01.csv",
@@ -70,7 +70,7 @@ run_params: {
     batch_size: 100,
     validation_size: 50,
     tracking_frequency: 1,
-    loss_weights: [0.95, 0.05],
-    label_weights: [0.79, 0.1, 0.1, 0.01],
+    loss_weights: [0.6, 0.4],
+    label_weights: [0.75, 0.14, 0.07, 0.04],
     classes: ['cancer', 'healthy'],
 }

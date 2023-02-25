@@ -205,7 +205,7 @@ class Train:
                     truths.append(gt.detach())
                     criterion = F.binary_cross_entropy(p, gt, weight=label_weights)
                     reg = self._Regularization(p, gt, label_weights, gpu_id)
-                    loss = torch.sum(loss_weights * torch.cat([criterion, reg]))
+                    loss = loss_weights[0] * criterion - loss_weights[1] * reg
                     loss.backward()
                     self.optimizer.step()
                     if self.sel_scheduler == "cyclic":
