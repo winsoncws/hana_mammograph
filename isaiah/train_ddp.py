@@ -71,7 +71,7 @@ class Train:
         self.model_name = self.train_cfgs.model
         self.sel_optim = self.train_cfgs.optimizer
         self.sel_scheduler = self.train_cfgs.scheduler
-        self.sel_regs = self.train_cfgs.regulraizers
+        self.sel_regs = self.train_cfgs.regularizers
         self.label_weights = self.train_cfgs.label_weights
         self.loss_weights = self.train_cfgs.loss_weights
 

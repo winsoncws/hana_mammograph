@@ -23,6 +23,7 @@ preprocess_params: {
 }
 
 metadata_params: {
+    test_set: False,
     selected_columns: ['image_id', 'patient_id', 'laterality', 'view', 'age',
                        'cancer', 'implant', 'density', 'machine_id', 
                        'difficult_negative_case'],
@@ -70,7 +71,7 @@ run_params: {
     batch_size: 40,
     validation_size: 60,
     tracking_frequency: 1,
-    loss_weights: [0.3, 0.7],
+    loss_weights: [0.5, 0.5],
     label_weights: [0.75, 0.14, 0.07, 0.04],
     classes: ['cancer', 'healthy'],
 }
