@@ -341,6 +341,11 @@ class DoubleBalancedGroupDistSampler(Sampler[T_co]):
         b = np.asarray(group2).reshape((-1, self.num_replicas))
         return np.concatenate((a,b), axis=1).flatten().tolist()
 
+    def sort_samples2(self, group1, group2):
+        rng = np.random.default_rng(seed=self.seed + self.epoch)
+        joined = np.concatenate((np.asarray(group1), np.asarray(group2)))
+        rng.shuffle(joined)
+        return joined.tolist()
 
 
 if __name__ == "__main__":
